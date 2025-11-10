@@ -5,7 +5,6 @@ import altair as alt
 import time
 import re
 from io import BytesIO
-from functools import reduce
 
 def round_half_up(series):
     return np.floor(series * 100 + 0.5) / 100
