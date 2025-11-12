@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 
 def page():
-    st.title("🏡 Intro: Bid & Price Analytics Tool")
+    st.header("🏡 Intro: Bid & Price Analytics Tool")
     st.markdown(
         ":red-badge[Indosat] :orange-badge[Ooredoo] :green-badge[Hutchison]"
     )

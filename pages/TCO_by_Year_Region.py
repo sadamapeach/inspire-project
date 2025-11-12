@@ -215,11 +215,12 @@ def get_excel_download_highlight_1st_2nd_lowest(df, sheet_name="Your_file_name")
 
 def page():
     # Header Title
-    st.title("3️⃣ TCO by Year + Region")
+    # st.title("3️⃣ TCO Comparison by Year + Region")
+    st.markdown("## 3️⃣ TCO Comparison by Year + Region")
     st.markdown(
         ":red-badge[Indosat] :orange-badge[Ooredoo] :green-badge[Hutchison]"
     )
-    st.caption("Hai Team! Drop in your annual pricing template and let this analytics system work its magic ✨")
+    st.caption("Upload your pricing template — the tool will generate your analytics summary automatically ✨")
 
     # Divider custom
     st.markdown(
