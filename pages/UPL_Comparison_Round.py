@@ -197,10 +197,10 @@ def page():
     st.divider()
 
     # OVERVIEW
-    st.subheader("🔍 Overview")
+    # st.subheader("🔍 Overview")
     # Total bidders
     total_sheets = len(all_df)
-    st.caption(f"You're analyzing offers from **{total_sheets} participating bidders** in this session 🧐")
+    # st.caption(f"You're analyzing offers from **{total_sheets} participating bidders** in this session 🧐")
 
     result = {}
 
@@ -241,92 +241,107 @@ def page():
         # Format Rupiah
         df_styled = df_clean.style.format({col: format_rupiah for col in num_cols})
 
-        st.markdown(
-            f"""
-            <div style='display: flex; justify-content: space-between; 
-                        align-items: center; margin-bottom: 8px;'>
-                <span style='font-size:15px;'>✨ {name}</span>
-                <span style='font-size:12px; color:#808080;'>
-                    Total rows: <b>{len(df_clean):,}</b>
-                </span>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+        # st.markdown(
+        #     f"""
+        #     <div style='display: flex; justify-content: space-between; 
+        #                 align-items: center; margin-bottom: 8px;'>
+        #         <span style='font-size:15px;'>✨ {name}</span>
+        #         <span style='font-size:12px; color:#808080;'>
+        #             Total rows: <b>{len(df_clean):,}</b>
+        #         </span>
+        #     </div>
+        #     """,
+        #     unsafe_allow_html=True
+        # )
 
         result[name] = df_clean
-        st.dataframe(df_styled, hide_index=True)
+        # st.dataframe(df_styled, hide_index=True)
 
-        # --- NOTIFIKASI KHUSUS ---
-        if (rows_after < rows_before) or (cols_after < cols_before):
-            st.markdown(
-                "<p style='font-size:12px; color:#808080; margin-top:-15px; margin-bottom:0;'>"
-                "Preprocessing completed! Hidden rows and columns removed ✅</p>",
-                unsafe_allow_html=True
-            )
+        # # --- NOTIFIKASI KHUSUS ---
+        # if (rows_after < rows_before) or (cols_after < cols_before):
+        #     st.markdown(
+        #         "<p style='font-size:12px; color:#808080; margin-top:-15px; margin-bottom:0;'>"
+        #         "Preprocessing completed! Hidden rows and columns removed ✅</p>",
+        #         unsafe_allow_html=True
+        #     )
 
     st.session_state["result_upl_comparison"] = result
+    # st.divider()
+
+    # MERGEE
+    st.markdown("##### 🗃️ Merge Data")
+    st.caption(f"Successfully consolidated data from **{total_sheets} vendors**.")
+
+    all_rounds = []
+
+    for i, (round_name, df) in enumerate(result.items(), start=1):
+        df_round = df.copy()
+
+        # Identifikasi kolom pertama (Vendor) & kolom terakhir (Unit Price)
+        vendor_col = df_round.columns[0]
+        price_col = df_round.columns[-1]
+
+        # Kolom dinamis di tengah 
+        mid_cols = df_round.columns[1:-1]
+
+        # Tambahkan kolom ROUND di posisi pertama
+        df_round.insert(0, "ROUND", round_name.upper())
+
+        # Simpan nama vendor untuk grouping
+        grouped = []
+        for vendor, group in df_round.groupby(vendor_col, dropna=False):
+            # Tambahkan baris TOTAL
+            total_row = {col: None for col in df_round.columns}
+            total_row["ROUND"] = round_name.upper()
+            total_row[vendor_col] = vendor
+            total_row[price_col] = group[price_col].sum()
+            total_row.update({col: "TOTAL" if col in mid_cols else total_row[col] for col in mid_cols})
+
+            # Gabungkan data vendor + total row
+            grouped.append(pd.concat([group, pd.DataFrame([total_row])], ignore_index=True))
+
+        # Satukan semua vendor dalam round tersebut
+        df_with_total = pd.concat(grouped, ignore_index=True)
+
+        # Tambahkan ke list semua round
+        all_rounds.append(df_with_total)
+
+    # Gabungkan semua round jadi satu DataFrame besar
+    df_round_final = pd.concat(all_rounds, ignore_index=True)
+
+    # Reorder kolom sesuai urutan
+    ordered_cols = ["ROUND", vendor_col] + list(mid_cols) + [price_col]
+    df_round_final = df_round_final[ordered_cols]
+
+    # Simpan session
+    st.session_state["upl_comparison_round_by_round_summary"] = df_round_final
+
+    # Format rupiah dan tampilkan
+    num_cols = df_round_final.select_dtypes(include=["number"]).columns
+    df_round_styled = (
+        df_round_final.style
+        .format({col: format_rupiah for col in num_cols})
+        .apply(highlight_total_row_v2, axis=1)
+    )
+    st.dataframe(df_round_styled, hide_index=True)
+
+    # Download
+    excel_data = get_excel_download_highlight_total(df_round_final)
+    col1, col2, col3 = st.columns([2.3,2,1])
+    with col3:
+        st.download_button(
+            label="Download",
+            data=excel_data,
+            file_name="Merge UPL Round.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            icon=":material/download:",
+        )
+
     st.divider()
 
-    # # OVERVIEW
-    # st.subheader("🔍 Overview")
-
-    # # Hide case
-    # if df.isna().all(axis=1).any() or df.isna().all(axis=0).any():
-    #     # Pre-processing: hapus baris & kolom kosong total
-    #     df_clean = df.dropna(how="all").dropna(axis=1, how="all")
-
-    #     # Gunakan baris pertama sebagai header
-    #     df_clean.columns = df_clean.iloc[0]
-    #     df_clean = df_clean[1:].reset_index(drop=True)
-
-    #     # Konversi tipe data otomatis
-    #     df = df_clean.convert_dtypes()
-
-    #     # Bersihkan semua kemungkinan tipe numpy di kolom, index, dan isi
-    #     def safe_convert(x):
-    #         if isinstance(x, (np.generic, np.number)):
-    #             return x.item()
-    #         return x
-
-    #     df = df.map(safe_convert)  # untuk isi dataframe
-    #     df.columns = [safe_convert(c) for c in df.columns]  # kolom
-    #     df.index = [safe_convert(i) for i in df.index]      # index
-
-    #     # Paksa semua header & index ke string agar JSON safe
-    #     df.columns = df.columns.map(str)
-    #     df.index = df.index.map(str)  
-
-    #     # Tampilkan di Streamlit
-    #     st.caption(f"Your dataset contains **{len(df)} rows** ready for analysis!")
-    #     st.dataframe(df, hide_index=True)
-
-    #     # st.dataframe(df, hide_index=True)
-    #     st.markdown(
-    #         """
-    #         <p style='font-size:12px; color:#808080; margin-top:-15px; margin-bottom:0;'>
-    #             Preprocessing completed! Hidden rows and columns removed ✅
-    #         </p>
-    #         """,
-    #         unsafe_allow_html=True
-    #     )
-    
-    # else:
-    #     # Tampilkan di Streamlit
-    #     st.caption(f"Data loaded! Your dataset contains **{len(df)} rows** ready for analysis 🤓")
-    #     st.dataframe(df, hide_index=True)
-
-    #     # st.dataframe(df, hide_index=True)
-    #     st.markdown(
-    #         """
-    #         <p style='font-size:12px; color:#808080; margin-top:-15px; margin-bottom:0;'>
-    #             No hidden rows and columns detected. Proceeding with raw data ✅
-    #         </p>
-    #         """,
-    #         unsafe_allow_html=True
-    #     )
-
-    # st.write("")
+    # TRANSPOSEE DATA
+    st.markdown("##### 🛸 Transpose Data")
+    st.caption("Cross-vendor price mapping to simplify analysis and highlight pricing differences.")
 
     # st.subheader("🧮 Round: Lowest Price & Gap (%)")
 
