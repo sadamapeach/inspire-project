@@ -167,6 +167,48 @@ def get_excel_download_highlight_1st_2nd_lowest(df, sheet_name="Your_file_name")
 
     return output.getvalue()
 
+# Download highlight total per round
+@st.cache_data
+def get_excel_download_with_highlight_round(df, sheet_name="Sheet1"):
+    output = BytesIO()
+
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name=sheet_name)
+        
+        workbook  = writer.book
+        worksheet = writer.sheets[sheet_name]
+
+        # --- Format untuk highlight ---
+        total_round_format = workbook.add_format({
+            'bold': True, 
+            'bg_color': '#FFEB9C',  # kuning lembut
+            'font_color': '#9C6500'  # kuning agak gelap
+        })
+        total_all_format = workbook.add_format({
+            'bold': True, 
+            'bg_color': '#C6EFCE',  # hijau lembut
+            'font_color': '#006100'  # hijau agak gelap
+        })
+
+        # --- Iterasi baris untuk highlight ---
+        for row_num, row in df.iterrows():
+            round_val = str(row[df.columns[0]]).strip().upper()     # kolom ROUND
+            scope_val = str(row[df.columns[1]]).strip().upper()     # kolom scope pertama (dinamis)
+
+            if scope_val == "TOTAL" and round_val != "TOTAL":
+                fmt = total_round_format
+            elif round_val == "TOTAL":
+                fmt = total_all_format
+            else:
+                continue
+
+            # Warnai semua kolom pada baris ini
+            for col_num, value in enumerate(row):
+                worksheet.write(row_num + 1, col_num, value, fmt)
+
+    return output.getvalue()
+
+
 def page():
     # Header Title
     st.header("5️⃣ UPL Comparison Round by Round")
@@ -431,6 +473,21 @@ def page():
     )
 
     st.dataframe(df_pivot_style, hide_index=True)
+
+    # Download button to Excel
+    excel_data = get_excel_download_with_highlight_round(df_summary)
+    # Pastikan berada di tab atau st
+    col1, col2, col3 = st.columns([2.3,2,1])
+    with col3:
+        st.download_button(
+            label="Download",
+            data=excel_data,
+            file_name="Transpose UPL Round.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            icon=":material/download:",
+        )
+    
+    st.divider()
 
     # st.subheader("🧮 Round: Lowest Price & Gap (%)")
 
