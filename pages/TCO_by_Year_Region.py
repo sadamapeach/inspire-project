@@ -34,6 +34,22 @@ def highlight_total_row(row):
     else:
         return [""] * len(row)
     
+# # Highlight total per year
+# def highlight_total_per_year(row):
+#     # YEAR = kolom ke-1, SCOPE = kolom ke-2 (berdasarkan struktur kamu)
+#     if len(row) > 2 and str(row.iloc[2]).strip().upper() == "TOTAL" and pd.notna(row.iloc[1]):
+#         return ["font-weight: bold; background-color: #FFEB9C; color: #9C6500;"] * len(row)
+#     else:
+#         return [""] * len(row)
+
+# # Highlight vendor total
+# def highlight_vendor_total(row):
+#     # YEAR = kolom ke-1 (berdasarkan struktur kamu)
+#     if str(row.iloc[1]).strip().upper() == "TOTAL":
+#         return ["font-weight: bold; background-color: #C6EFCE; color: #006100;"] * len(row)
+#     else:
+#         return [""] * len(row)
+
 # Highlight total per year
 def highlight_total_per_year(row):
     if str(row["SCOPE"]).strip().upper() == "TOTAL" and pd.notna(row["YEAR"]):

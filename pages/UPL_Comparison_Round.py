@@ -42,6 +42,22 @@ def highlight_total_row_v2(row):
     else:
         return [""] * len(row)
     
+# Highlight total per round
+def highlight_total_per_round(row):
+    # Kita ambil kolom ke-1 karena kolom 0 = ROUND
+    if len(row) > 1 and str(row.iloc[1]).strip().upper() == "TOTAL":
+        return ["font-weight: bold; background-color: #FFEB9C; color: #9C6500;"] * len(row)
+    else:
+        return [""] * len(row)
+
+# Highlight vendor total
+def highlight_total_all_round(row):
+    # Kolom pertama (index 0) adalah kolom ROUND
+    if str(row.iloc[0]).strip().upper() == "TOTAL":
+        return ["font-weight: bold; background-color: #C6EFCE; color: #006100;"] * len(row)
+    else:
+        return [""] * len(row)
+    
 def highlight_1st_2nd_vendor(row, columns):
     styles = [""] * len(columns)
     first_vendor = row.get("1st Vendor")
@@ -314,7 +330,7 @@ def page():
     df_round_final = df_round_final[ordered_cols]
 
     # Simpan session
-    st.session_state["upl_comparison_round_by_round_summary"] = df_round_final
+    st.session_state["upl_comparison_round_by_round_final"] = df_round_final
 
     # Format rupiah dan tampilkan
     num_cols = df_round_final.select_dtypes(include=["number"]).columns
@@ -342,6 +358,79 @@ def page():
     # TRANSPOSEE DATA
     st.markdown("##### 🛸 Transpose Data")
     st.caption("Cross-vendor price mapping to simplify analysis and highlight pricing differences.")
+
+    all_rounds_list = []
+
+    for round_name, df in result.items():
+        df_temp = df.copy()
+
+        # Identifikasi kolom dinamis
+        vendor_col = df_temp.columns[0]
+        price_col = df_temp.columns[-1]
+        scope_cols = df_temp.columns[1:-1]
+
+        df_temp[vendor_col] = (
+            df_temp[vendor_col].astype(str).str.strip().str.upper()
+        )
+
+        # Simpan urutan unik kombinasi scope dari df asli
+        unique_order = df_temp[list(scope_cols)].drop_duplicates().reset_index(drop=True)
+
+        # Pivot: scope jadi baris, vendor jadi kolom, value = price
+        pivot_df = df_temp.pivot_table(
+            index=list(scope_cols),
+            columns=vendor_col,
+            values=price_col,
+            aggfunc="sum"
+        ).reset_index()
+
+        # Merge dengan urutan asli agar tidak teracak
+        pivot_df = unique_order.merge(pivot_df, on=list(scope_cols), how="left")
+
+        # Tambahkan kolom ROUND di depan
+        pivot_df.insert(0, "ROUND", round_name.upper())
+
+        # Tambahkan baris TOTAL per round
+        total_row = {col: "" for col in pivot_df.columns}
+        total_row["ROUND"] = round_name.upper()
+        if len(scope_cols) > 0:
+            total_row[scope_cols[0]] = "TOTAL"  # cuma isi di scope pertama
+        for v in pivot_df.columns:
+            if v not in ["ROUND", *scope_cols]:
+                total_row[v] = pivot_df[v].sum()
+
+        pivot_df = pd.concat([pivot_df, pd.DataFrame([total_row])], ignore_index=True)
+
+        # Simpan hasil per round
+        all_rounds_list.append(pivot_df)
+
+    # Gabungkan semua round
+    df_summary = pd.concat(all_rounds_list, ignore_index=True)
+
+    # Tambahkan TOTAL AKHIR (semua round)
+    total_all_row = {col: "" for col in df_summary.columns}
+    total_all_row["ROUND"] = "TOTAL"
+
+    for v in df_summary.columns:
+        if v not in ["ROUND", *scope_cols]:
+            # sum semua total per round
+            total_all_row[v] = df_summary[df_summary[scope_cols[0]] == "TOTAL"][v].sum()
+
+    df_summary = pd.concat([df_summary, pd.DataFrame([total_all_row])], ignore_index=True)
+
+    # Simpan session
+    st.session_state["upl_comparison_round_by_round_pivot"] = df_summary
+
+    # Format rupiah dan tampilkan
+    num_cols = df_summary.select_dtypes(include=["number"]).columns
+    df_pivot_style = (
+        df_summary.style
+        .format({col: format_rupiah for col in num_cols})
+        .apply(highlight_total_per_round, axis=1)
+        .apply(highlight_total_all_round, axis=1)
+    )
+
+    st.dataframe(df_pivot_style, hide_index=True)
 
     # st.subheader("🧮 Round: Lowest Price & Gap (%)")
 
