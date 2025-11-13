@@ -268,65 +268,65 @@ def page():
     st.session_state["result_upl_comparison"] = result
     st.divider()
 
-    # OVERVIEW
-    st.subheader("🔍 Overview")
+    # # OVERVIEW
+    # st.subheader("🔍 Overview")
 
-    # Hide case
-    if df.isna().all(axis=1).any() or df.isna().all(axis=0).any():
-        # Pre-processing: hapus baris & kolom kosong total
-        df_clean = df.dropna(how="all").dropna(axis=1, how="all")
+    # # Hide case
+    # if df.isna().all(axis=1).any() or df.isna().all(axis=0).any():
+    #     # Pre-processing: hapus baris & kolom kosong total
+    #     df_clean = df.dropna(how="all").dropna(axis=1, how="all")
 
-        # Gunakan baris pertama sebagai header
-        df_clean.columns = df_clean.iloc[0]
-        df_clean = df_clean[1:].reset_index(drop=True)
+    #     # Gunakan baris pertama sebagai header
+    #     df_clean.columns = df_clean.iloc[0]
+    #     df_clean = df_clean[1:].reset_index(drop=True)
 
-        # Konversi tipe data otomatis
-        df = df_clean.convert_dtypes()
+    #     # Konversi tipe data otomatis
+    #     df = df_clean.convert_dtypes()
 
-        # Bersihkan semua kemungkinan tipe numpy di kolom, index, dan isi
-        def safe_convert(x):
-            if isinstance(x, (np.generic, np.number)):
-                return x.item()
-            return x
+    #     # Bersihkan semua kemungkinan tipe numpy di kolom, index, dan isi
+    #     def safe_convert(x):
+    #         if isinstance(x, (np.generic, np.number)):
+    #             return x.item()
+    #         return x
 
-        df = df.map(safe_convert)  # untuk isi dataframe
-        df.columns = [safe_convert(c) for c in df.columns]  # kolom
-        df.index = [safe_convert(i) for i in df.index]      # index
+    #     df = df.map(safe_convert)  # untuk isi dataframe
+    #     df.columns = [safe_convert(c) for c in df.columns]  # kolom
+    #     df.index = [safe_convert(i) for i in df.index]      # index
 
-        # Paksa semua header & index ke string agar JSON safe
-        df.columns = df.columns.map(str)
-        df.index = df.index.map(str)  
+    #     # Paksa semua header & index ke string agar JSON safe
+    #     df.columns = df.columns.map(str)
+    #     df.index = df.index.map(str)  
 
-        # Tampilkan di Streamlit
-        st.caption(f"Your dataset contains **{len(df)} rows** ready for analysis!")
-        st.dataframe(df, hide_index=True)
+    #     # Tampilkan di Streamlit
+    #     st.caption(f"Your dataset contains **{len(df)} rows** ready for analysis!")
+    #     st.dataframe(df, hide_index=True)
 
-        # st.dataframe(df, hide_index=True)
-        st.markdown(
-            """
-            <p style='font-size:12px; color:#808080; margin-top:-15px; margin-bottom:0;'>
-                Preprocessing completed! Hidden rows and columns removed ✅
-            </p>
-            """,
-            unsafe_allow_html=True
-        )
+    #     # st.dataframe(df, hide_index=True)
+    #     st.markdown(
+    #         """
+    #         <p style='font-size:12px; color:#808080; margin-top:-15px; margin-bottom:0;'>
+    #             Preprocessing completed! Hidden rows and columns removed ✅
+    #         </p>
+    #         """,
+    #         unsafe_allow_html=True
+    #     )
     
-    else:
-        # Tampilkan di Streamlit
-        st.caption(f"Data loaded! Your dataset contains **{len(df)} rows** ready for analysis 🤓")
-        st.dataframe(df, hide_index=True)
+    # else:
+    #     # Tampilkan di Streamlit
+    #     st.caption(f"Data loaded! Your dataset contains **{len(df)} rows** ready for analysis 🤓")
+    #     st.dataframe(df, hide_index=True)
 
-        # st.dataframe(df, hide_index=True)
-        st.markdown(
-            """
-            <p style='font-size:12px; color:#808080; margin-top:-15px; margin-bottom:0;'>
-                No hidden rows and columns detected. Proceeding with raw data ✅
-            </p>
-            """,
-            unsafe_allow_html=True
-        )
+    #     # st.dataframe(df, hide_index=True)
+    #     st.markdown(
+    #         """
+    #         <p style='font-size:12px; color:#808080; margin-top:-15px; margin-bottom:0;'>
+    #             No hidden rows and columns detected. Proceeding with raw data ✅
+    #         </p>
+    #         """,
+    #         unsafe_allow_html=True
+    #     )
 
-    st.write("")
+    # st.write("")
 
     # st.subheader("🧮 Round: Lowest Price & Gap (%)")
 
