@@ -232,8 +232,7 @@ def page():
         type=["xlsx"],
         accept_multiple_files=True
     )
-
-    
+ 
     # Pre-processing
     def clean_dataframe(df):
         """Apply cleaning rules to each sheet."""
@@ -266,11 +265,20 @@ def page():
         df_clean.index = df_clean.index.map(str)
 
         return df_clean
-
+    
+    # Simpan file ke session
     if upload_files:
-        all_rounds = []
         st.session_state["upload_multi_file_upl_round_by_round"] = upload_files
-        
+    
+    elif "upload_multi_file_upl_round_by_round" in st.session_state:
+        upload_files = st.session_state["upload_multi_file_upl_round_by_round"]
+
+    else:
+        st.info("Please upload files to continue.")
+        st.stop() 
+    
+    all_rounds = []
+    if "already_processed_upl_round_by_round" not in st.session_state:
         # --- Animasi proses upload ---
         msg = st.toast("📂 Uploading files...")
         time.sleep(1.2)
@@ -281,73 +289,76 @@ def page():
         msg.toast("✅ File uploaded successfully!")
         time.sleep(0.5)
 
-        for file in upload_files:
-            # STEP 1: ambil nama file sebagai ROUND
-            filename = os.path.splitext(file.name)[0]   # contoh: "L2R1"
+    for file in upload_files:
+        # STEP 1: ambil nama file sebagai ROUND
+        filename = os.path.splitext(file.name)[0]   # contoh: "L2R1"
 
-            # STEP 2: baca semua sheet dalam file
-            xls = pd.ExcelFile(file)
-            sheets = xls.sheet_names    # list nama vendor
+        # STEP 2: baca semua sheet dalam file
+        xls = pd.ExcelFile(file)
+        sheets = xls.sheet_names    # list nama vendor
 
-            merged_per_file = []        # penampung merge sheet untuk satu file
+        merged_per_file = []        # penampung merge sheet untuk satu file
 
-            for sheet in sheets:
-                df_raw = pd.read_excel(xls, sheet_name=sheet)
-                df_clean = clean_dataframe(df_raw)      # cleaning
-                df_clean.insert(0, "VENDOR", sheet)     # tambahkan kolom VENDOR
-                merged_per_file.append(df_clean)
+        for sheet in sheets:
+            df_raw = pd.read_excel(xls, sheet_name=sheet)
+            df_clean = clean_dataframe(df_raw)      # cleaning
+            df_clean.insert(0, "VENDOR", sheet)     # tambahkan kolom VENDOR
+            merged_per_file.append(df_clean)
 
-            # STEP 3: merge semua sheet dalam 1 file
-            df_merge_sheet = pd.concat(merged_per_file, ignore_index=True)
-            df_merge_sheet.insert(0, "ROUND", filename)
-            all_rounds.append(df_merge_sheet)   # masukkan ke list besar
+        # STEP 3: merge semua sheet dalam 1 file
+        df_merge_sheet = pd.concat(merged_per_file, ignore_index=True)
+        df_merge_sheet.insert(0, "ROUND", filename)
+        all_rounds.append(df_merge_sheet)   # masukkan ke list besar
 
-        # STEP 4: MERGE SEMUA FILE
-        final_df = pd.concat(all_rounds, ignore_index=True)
+    # STEP 4: MERGE SEMUA FILE
+    final_df = pd.concat(all_rounds, ignore_index=True)
 
-        # === MENAMBAHKAN TOTAL ROW ===
-        df_with_total = []
+    # === MENAMBAHKAN TOTAL ROW ===
+    df_with_total = []
 
-        for (rnd, vendor), group in final_df.groupby(["ROUND", "VENDOR"]):
-            df_temp = group.copy()
+    for (rnd, vendor), group in final_df.groupby(["ROUND", "VENDOR"]):
+        df_temp = group.copy()
 
-            numeric_cols = df_temp.select_dtypes(include="number").columns
-            last_numeric_col = numeric_cols[-1] if len(numeric_cols) else None
+        numeric_cols = df_temp.select_dtypes(include="number").columns
+        last_numeric_col = numeric_cols[-1] if len(numeric_cols) else None
 
-            total_row = {col: "" for col in df_temp.columns}
-            total_row["ROUND"] = rnd
-            total_row["VENDOR"] = vendor
+        total_row = {col: "" for col in df_temp.columns}
+        total_row["ROUND"] = rnd
+        total_row["VENDOR"] = vendor
 
-            # Kolom pertama setelah ROUND & VENDOR -> jadi 'TOTAL'
-            first_data_col = df_temp.columns[2]
-            total_row[first_data_col] = "TOTAL"
+        # Kolom pertama setelah ROUND & VENDOR -> jadi 'TOTAL'
+        first_data_col = df_temp.columns[2]
+        total_row[first_data_col] = "TOTAL"
 
-            if last_numeric_col:
-                total_row[last_numeric_col] = df_temp[last_numeric_col].sum(skipna=True)
-            
-            df_temp = pd.concat([df_temp, pd.DataFrame([total_row])], ignore_index=True)
-            df_with_total.append(df_temp)
+        if last_numeric_col:
+            total_row[last_numeric_col] = df_temp[last_numeric_col].sum(skipna=True)
         
-        final_df = pd.concat(df_with_total, ignore_index=True)
-        st.session_state["merge_upl_round_by_round"] = final_df
+        df_temp = pd.concat([df_temp, pd.DataFrame([total_row])], ignore_index=True)
+        df_with_total.append(df_temp)
+    
+    final_df = pd.concat(df_with_total, ignore_index=True)
 
-        st.divider()
+    # Simpan ke session_state (supaya ga hilang saat pindah tab)
+    st.session_state["merge_upl_round_by_round"] = final_df
+    st.session_state["already_processed_upl_round_by_round"] = True
 
-        # Merge Data
-        st.markdown("##### 🗃️ Merge Data")
-        st.caption(f"Successfully consolidated data from **{len(upload_files)} files**.")
+    st.divider()
 
-        # Pembulatan
-        num_cols = final_df.select_dtypes(include=["number"]).columns
-        final_df[num_cols] = final_df[num_cols].apply(round_half_up_num)
+    # Merge Data
+    st.markdown("##### 🗃️ Merge Data")
+    st.caption(f"Successfully consolidated data from **{len(upload_files)} files**.")
 
-        # Format Rupiah
-        df_styled = (
-            final_df.style
-            .format({col: format_rupiah for col in num_cols})
-            .apply(highlight_total_row_v2, axis=1)
-        )
-        st.dataframe(df_styled, hide_index=True)
+    # Pembulatan
+    num_cols = final_df.select_dtypes(include=["number"]).columns
+    final_df[num_cols] = final_df[num_cols].apply(round_half_up_num)
+
+    # Format Rupiah
+    df_styled = (
+        final_df.style
+        .format({col: format_rupiah for col in num_cols})
+        .apply(highlight_total_row_v2, axis=1)
+    )
+    st.dataframe(df_styled, hide_index=True)
 
 #     # File Uploader
 #     # st.subheader("📂 Upload File")
