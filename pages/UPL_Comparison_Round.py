@@ -313,6 +313,9 @@ def page():
     # STEP 4: MERGE SEMUA FILE
     final_df = pd.concat(all_rounds, ignore_index=True)
 
+    # Simpan untuk transpose nanti
+    raw_transpose = final_df.copy()
+
     # === MENAMBAHKAN TOTAL ROW ===
     df_with_total = []
 
@@ -360,269 +363,109 @@ def page():
     )
     st.dataframe(df_styled, hide_index=True)
 
-#     # File Uploader
-#     # st.subheader("📂 Upload File")
-#     st.markdown("##### 📂 Upload File")
-#     upload_file = st.file_uploader("Upload your file here!", type=["xlsx", "xls"])
+    # Download
+    excel_data = get_excel_download_highlight_total(final_df)
+    col1, col2, col3 = st.columns([2.3,2,1])
+    with col3:
+        st.download_button(
+            label="Download",
+            data=excel_data,
+            file_name="Merge UPL Round.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            icon=":material/download:",
+        )
 
-#     if upload_file is not None:
-#         st.session_state["uploaded_file_upl_round_by_round"] = upload_file
+    st.divider()
 
-#         # --- Animasi proses upload ---
-#         msg = st.toast("📂 Uploading file...")
-#         time.sleep(1.2)
+    # TRANSPOSEE DATA
+    st.markdown("##### 🛸 Transpose Data")
+    st.caption("Cross-vendor price mapping to simplify analysis and highlight pricing differences.")
 
-#         msg.toast("🔍 Reading sheets...")
-#         time.sleep(1.2)
+    df = raw_transpose.copy()
+    all_rounds_list = []
 
-#         msg.toast("✅ File uploaded successfully!")
-#         time.sleep(0.5)
+    # Ambil nama kolom
+    round_col = df.columns[0]
+    vendor_col = df.columns[1]
+    scope_cols = df.columns[2:-1]
+    price_col = df.columns[-1]
 
-#         # Baca sheet
-#         all_df = pd.read_excel(upload_file, sheet_name=None)
-#         st.session_state["df_upl_round_by_round_raw"] = all_df
+    for round_name, df_round in df.groupby(round_col):
+        df_temp = df_round.copy()
 
-#     elif "df_upl_round_by_round_raw" in st.session_state:
-#         all_df = st.session_state["df_upl_round_by_round_raw"]
-#     else:
-#         return
-    
-#     st.divider()
+        # Normalisasi vendor
+        df_temp[vendor_col] = df_temp[vendor_col].astype(str).str.strip().str.upper()
 
-    # # OVERVIEW
-    # # st.subheader("🔍 Overview")
-    # # Total bidders
-    # total_sheets = len(all_df)
-    # # st.caption(f"You're analyzing offers from **{total_sheets} participating bidders** in this session 🧐")
+        # Simpan urutan
+        unique_order = df_temp[list(scope_cols)].drop_duplicates().reset_index(drop=True)
 
-    # result = {}
+        # Pivot
+        pivot_df = df_temp.pivot_table(
+            index=list(scope_cols),
+            columns=vendor_col,
+            values=price_col,
+            aggfunc="sum"
+        ).reset_index()
 
-    # for name, df in all_df.items():
-    #     rows_before, cols_before = df.shape
-    #     # Data cleaning
-    #     df_clean = df.replace(r'^\s*$', None, regex=True)
-    #     df_clean = df_clean.dropna(how="all", axis=0).dropna(how="all", axis=1)
+        # Merge agar urutan sesuai
+        pivot_df = unique_order.merge(pivot_df, on=list(scope_cols), how="left")
 
-    #     rows_after, cols_after = df_clean.shape
+        # Tambahkan kolom ROUND
+        pivot_df.insert(0, "ROUND", round_name.upper())
 
-    #     # Gunakan baris pertama sebagai header (hanya jika kolom belum ada nama atau Unnamed)
-    #     if any("Unnamed" in str(c) for c in df_clean.columns):
-    #         df_clean.columns = df_clean.iloc[0]
-    #         df_clean = df_clean[1:].reset_index(drop=True)
+        # Tambahkan baris TOTAL per round
+        total_row = {col: "" for col in pivot_df.columns}
+        total_row["ROUND"] = round_name.upper()
+        total_row[scope_cols[0]] = "TOTAL"
 
-    #     # Konversi tipe data otomatis
-    #     df_clean = df_clean.convert_dtypes()
+        for v in pivot_df.columns:
+            if v not in ["ROUND", *scope_cols]:
+                total_row[v] = pivot_df[v].sum()
 
-    #     # Bersihkan tipe numpy di kolom, index, dan isi
-    #     def safe_convert(x):
-    #         if isinstance(x, (np.generic, np.number)):
-    #             return x.item()
-    #         return x
+        pivot_df = pd.concat([pivot_df, pd.DataFrame([total_row])], ignore_index=True)
 
-    #     df_clean = df_clean.map(safe_convert)
-    #     df_clean.columns = [safe_convert(c) for c in df_clean.columns]
-    #     df_clean.index = [safe_convert(i) for i in df_clean.index]
+        all_rounds_list.append(pivot_df)
 
-    #     # Paksa semua header & index ke string agar JSON safe
-    #     df_clean.columns = df_clean.columns.map(str)
-    #     df_clean.index = df_clean.index.map(str)
+    # Gabungkan semua round
+    df_summary = pd.concat(all_rounds_list, ignore_index=True)
 
-#         # Pembulatan
-#         num_cols = df_clean.select_dtypes(include=["number"]).columns
-#         df_clean[num_cols] = df_clean[num_cols].apply(round_half_up_num)
+    # TOTAL BESARR
+    total_all_row = {col: "" for col in df_summary.columns}
+    total_all_row["ROUND"] = "TOTAL"
 
-#         # Format Rupiah
-#         df_styled = df_clean.style.format({col: format_rupiah for col in num_cols})
+    for v in df_summary.columns:
+        if v not in ["ROUND", *scope_cols]:
+            total_all_row[v] = df_summary[df_summary[scope_cols[0]] == "TOTAL"][v].sum()
 
-#         # st.markdown(
-#         #     f"""
-#         #     <div style='display: flex; justify-content: space-between; 
-#         #                 align-items: center; margin-bottom: 8px;'>
-#         #         <span style='font-size:15px;'>✨ {name}</span>
-#         #         <span style='font-size:12px; color:#808080;'>
-#         #             Total rows: <b>{len(df_clean):,}</b>
-#         #         </span>
-#         #     </div>
-#         #     """,
-#         #     unsafe_allow_html=True
-#         # )
+    df_summary = pd.concat([df_summary, pd.DataFrame([total_all_row])], ignore_index=True)
 
-#         result[name] = df_clean
-#         # st.dataframe(df_styled, hide_index=True)
+    # Simpan dan tampilkan
+    st.session_state["upl_comparison_round_by_round_pivot"] = df_summary
 
-#         # # --- NOTIFIKASI KHUSUS ---
-#         # if (rows_after < rows_before) or (cols_after < cols_before):
-#         #     st.markdown(
-#         #         "<p style='font-size:12px; color:#808080; margin-top:-15px; margin-bottom:0;'>"
-#         #         "Preprocessing completed! Hidden rows and columns removed ✅</p>",
-#         #         unsafe_allow_html=True
-#         #     )
+    num_cols = df_summary.select_dtypes(include=["number"]).columns
+    df_pivot_style = (
+        df_summary.style
+            .format({col: format_rupiah for col in num_cols})
+            .apply(highlight_total_per_round, axis=1)
+            .apply(highlight_total_all_round, axis=1)
+    )
 
-#     st.session_state["result_upl_comparison"] = result
-#     # st.divider()
+    st.dataframe(df_pivot_style, hide_index=True)
 
-#     # MERGEE
-#     st.markdown("##### 🗃️ Merge Data")
-#     st.caption(f"Successfully consolidated data from **{total_sheets} vendors**.")
+    # Download button to Excel
+    excel_data = get_excel_download_with_highlight_round(df_summary)
+    # Pastikan berada di tab atau st
+    col1, col2, col3 = st.columns([2.3,2,1])
+    with col3:
+        st.download_button(
+            label="Download",
+            data=excel_data,
+            file_name="Transpose UPL Round.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            icon=":material/download:",
+        )
 
-#     all_rounds = []
-
-#     for i, (round_name, df) in enumerate(result.items(), start=1):
-#         df_round = df.copy()
-
-#         # Identifikasi kolom pertama (Vendor) & kolom terakhir (Unit Price)
-#         vendor_col = df_round.columns[0]
-#         price_col = df_round.columns[-1]
-
-#         # Kolom dinamis di tengah 
-#         mid_cols = df_round.columns[1:-1]
-
-#         # Tambahkan kolom ROUND di posisi pertama
-#         df_round.insert(0, "ROUND", round_name.upper())
-
-#         # Simpan nama vendor untuk grouping
-#         grouped = []
-#         for vendor, group in df_round.groupby(vendor_col, dropna=False):
-#             # Tambahkan baris TOTAL
-#             total_row = {col: None for col in df_round.columns}
-#             total_row["ROUND"] = round_name.upper()
-#             total_row[vendor_col] = vendor
-#             total_row[price_col] = group[price_col].sum()
-#             total_row.update({col: "TOTAL" if col in mid_cols else total_row[col] for col in mid_cols})
-
-#             # Gabungkan data vendor + total row
-#             grouped.append(pd.concat([group, pd.DataFrame([total_row])], ignore_index=True))
-
-#         # Satukan semua vendor dalam round tersebut
-#         df_with_total = pd.concat(grouped, ignore_index=True)
-
-#         # Tambahkan ke list semua round
-#         all_rounds.append(df_with_total)
-
-#     # Gabungkan semua round jadi satu DataFrame besar
-#     df_round_final = pd.concat(all_rounds, ignore_index=True)
-
-#     # Reorder kolom sesuai urutan
-#     ordered_cols = ["ROUND", vendor_col] + list(mid_cols) + [price_col]
-#     df_round_final = df_round_final[ordered_cols]
-
-#     # Simpan session
-#     st.session_state["upl_comparison_round_by_round_final"] = df_round_final
-
-#     # Format rupiah dan tampilkan
-#     num_cols = df_round_final.select_dtypes(include=["number"]).columns
-#     df_round_styled = (
-#         df_round_final.style
-#         .format({col: format_rupiah for col in num_cols})
-#         .apply(highlight_total_row_v2, axis=1)
-#     )
-#     st.dataframe(df_round_styled, hide_index=True)
-
-#     # Download
-#     excel_data = get_excel_download_highlight_total(df_round_final)
-#     col1, col2, col3 = st.columns([2.3,2,1])
-#     with col3:
-#         st.download_button(
-#             label="Download",
-#             data=excel_data,
-#             file_name="Merge UPL Round.xlsx",
-#             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-#             icon=":material/download:",
-#         )
-
-#     st.divider()
-
-#     # TRANSPOSEE DATA
-#     st.markdown("##### 🛸 Transpose Data")
-#     st.caption("Cross-vendor price mapping to simplify analysis and highlight pricing differences.")
-
-#     all_rounds_list = []
-
-#     for round_name, df in result.items():
-#         df_temp = df.copy()
-
-#         # Identifikasi kolom dinamis
-#         vendor_col = df_temp.columns[0]
-#         price_col = df_temp.columns[-1]
-#         scope_cols = df_temp.columns[1:-1]
-
-#         df_temp[vendor_col] = (
-#             df_temp[vendor_col].astype(str).str.strip().str.upper()
-#         )
-
-#         # Simpan urutan unik kombinasi scope dari df asli
-#         unique_order = df_temp[list(scope_cols)].drop_duplicates().reset_index(drop=True)
-
-#         # Pivot: scope jadi baris, vendor jadi kolom, value = price
-#         pivot_df = df_temp.pivot_table(
-#             index=list(scope_cols),
-#             columns=vendor_col,
-#             values=price_col,
-#             aggfunc="sum"
-#         ).reset_index()
-
-#         # Merge dengan urutan asli agar tidak teracak
-#         pivot_df = unique_order.merge(pivot_df, on=list(scope_cols), how="left")
-
-#         # Tambahkan kolom ROUND di depan
-#         pivot_df.insert(0, "ROUND", round_name.upper())
-
-#         # Tambahkan baris TOTAL per round
-#         total_row = {col: "" for col in pivot_df.columns}
-#         total_row["ROUND"] = round_name.upper()
-#         if len(scope_cols) > 0:
-#             total_row[scope_cols[0]] = "TOTAL"  # cuma isi di scope pertama
-#         for v in pivot_df.columns:
-#             if v not in ["ROUND", *scope_cols]:
-#                 total_row[v] = pivot_df[v].sum()
-
-#         pivot_df = pd.concat([pivot_df, pd.DataFrame([total_row])], ignore_index=True)
-
-#         # Simpan hasil per round
-#         all_rounds_list.append(pivot_df)
-
-#     # Gabungkan semua round
-#     df_summary = pd.concat(all_rounds_list, ignore_index=True)
-
-#     # Tambahkan TOTAL AKHIR (semua round)
-#     total_all_row = {col: "" for col in df_summary.columns}
-#     total_all_row["ROUND"] = "TOTAL"
-
-#     for v in df_summary.columns:
-#         if v not in ["ROUND", *scope_cols]:
-#             # sum semua total per round
-#             total_all_row[v] = df_summary[df_summary[scope_cols[0]] == "TOTAL"][v].sum()
-
-#     df_summary = pd.concat([df_summary, pd.DataFrame([total_all_row])], ignore_index=True)
-
-#     # Simpan session
-#     st.session_state["upl_comparison_round_by_round_pivot"] = df_summary
-
-#     # Format rupiah dan tampilkan
-#     num_cols = df_summary.select_dtypes(include=["number"]).columns
-#     df_pivot_style = (
-#         df_summary.style
-#         .format({col: format_rupiah for col in num_cols})
-#         .apply(highlight_total_per_round, axis=1)
-#         .apply(highlight_total_all_round, axis=1)
-#     )
-
-#     st.dataframe(df_pivot_style, hide_index=True)
-
-#     # Download button to Excel
-#     excel_data = get_excel_download_with_highlight_round(df_summary)
-#     # Pastikan berada di tab atau st
-#     col1, col2, col3 = st.columns([2.3,2,1])
-#     with col3:
-#         st.download_button(
-#             label="Download",
-#             data=excel_data,
-#             file_name="Transpose UPL Round.xlsx",
-#             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-#             icon=":material/download:",
-#         )
-    
-#     st.divider()
+    st.divider()
 
 #     # st.subheader("🧮 Round: Lowest Price & Gap (%)")
 
