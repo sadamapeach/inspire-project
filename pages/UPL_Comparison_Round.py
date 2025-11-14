@@ -467,6 +467,66 @@ def page():
 
     st.divider()
 
+    # BIDD & PRICEE ANALYSIS
+    st.markdown("##### 🧠 Bid & Price Analysis")
+    
+    analysis_results = {}
+
+    round_col = df_summary.columns[0]
+    scope_col = scope_cols[0]
+    dynamic_cols = scope_cols[1:]
+    vendor_cols = [c for c in df_summary.columns if c not in [round_col, *scope_cols]]
+
+    for round_name, df_round in df_summary.groupby(round_col):
+        # Skip TOTAL
+        if round_name == "TOTAL":
+            continue
+
+        # Hapus baris TOTAL per round
+        df_clean = df_round[df_round[scope_col] != "TOTAL"].copy()
+
+        # Hitung 1st & 2nd lowest
+        df_clean["1st Lowest"] = df_clean[vendor_cols].min(axis=1)
+        df_clean["1st Vendor"] = df_clean[vendor_cols].idxmin(axis=1)
+
+        # untuk 2nd lowest -> sort values per row
+        df_clean["2nd Lowest"] = df_clean[vendor_cols].apply(
+            lambda row: row.nsmallest(2).iloc[-1] if len(row.dropna()) >= 2 else np.nan,
+            axis=1
+        )
+        df_clean["2nd Vendor"] = df_clean[vendor_cols].apply(
+            lambda row: row.nsmallest(2).index[-1] if len(row.dropna()) >= 2 else "",
+            axis=1
+        )
+
+        # Gap %
+        df_clean["Gap 1 to 2 (%)"] = (
+            (df_clean["2nd Lowest"] - df_clean["1st Lowest"]) / df_clean["1st Lowest"] * 100
+        ).round(2)
+
+        # Median price
+        df_clean["Median Price"] = df_clean[vendor_cols].median(axis=1)
+
+        # Vendor → Median (%)
+        for v in vendor_cols:
+            df_clean[f"{v} to Median (%)"] = (
+                (df_clean[v] - df_clean["Median Price"]) / df_clean["Median Price"] * 100
+            ).round(2)
+
+        # Hapus kolom ROUND
+        df_clean = df_clean.drop(columns=[round_col])
+
+        # Simpan hasil untuk tab
+        analysis_results[round_name] = df_clean
+
+    tabs = st.tabs(list(analysis_results.keys()))
+
+    for tab, round_name in zip(tabs, analysis_results.keys()):
+        with tab:
+            df_analysis = analysis_results[round_name]
+            st.dataframe(df_analysis, hide_index=True)
+
+
 #     # st.subheader("🧮 Round: Lowest Price & Gap (%)")
 
 #     # col_vendor = df.columns[0]
