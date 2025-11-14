@@ -233,6 +233,40 @@ def page():
         accept_multiple_files=True
     )
 
+    
+    # Pre-processing
+    def clean_dataframe(df):
+        """Apply cleaning rules to each sheet."""
+        # Ganti string kosong atau spasi dengan NaN
+        df_clean = df.replace(r'^\s*$', None, regex=True)
+
+        # Hapus baris dan kolom kosong
+        df_clean = df_clean.dropna(how="all", axis=0).dropna(how="all", axis=1)
+
+        # Jika header "Unnamed" -> set row 0 as header
+        if any("Unnamed" in str(c) for c in df_clean.columns):
+            df_clean.columns = df_clean.iloc[0]
+            df_clean = df_clean[1:].reset_index(drop=True)
+
+        # Konversi tipe data
+        df_clean = df_clean.convert_dtypes()
+
+        # Safe conversion from numpy types
+        def safe_convert(x):
+            if isinstance(x, (np.generic, np.number)):
+                return x.item()
+            return x 
+        
+        df_clean = df_clean.map(safe_convert)
+        df_clean.columns = [safe_convert(c) for c in df_clean.columns]
+        df_clean.index = [safe_convert(i) for i in df_clean.index]
+
+        # Paksa nama kolom dan index menjadi string
+        df_clean.columns = df_clean.columns.map(str)
+        df_clean.index = df_clean.index.map(str)
+
+        return df_clean
+
     if upload_files:
         all_rounds = []
         st.session_state["upload_multi_file_upl_round_by_round"] = upload_files
@@ -258,9 +292,10 @@ def page():
             merged_per_file = []        # penampung merge sheet untuk satu file
 
             for sheet in sheets:
-                df = pd.read_excel(xls, sheet_name=sheet)
-                df.insert(0, "VENDOR", sheet)   # Tambahkan kolom VENDOR
-                merged_per_file.append(df)
+                df_raw = pd.read_excel(xls, sheet_name=sheet)
+                df_clean = clean_dataframe(df_raw)      # cleaning 
+                df_clean.insert(0, "VENDOR", sheet)           # Tambahkan kolom VENDOR
+                merged_per_file.append(df_clean)
 
             # STEP 3: merge semua sheet dalam 1 file
             df_merge_sheet = pd.concat(merged_per_file, ignore_index=True)
@@ -301,43 +336,43 @@ def page():
     
 #     st.divider()
 
-#     # OVERVIEW
-#     # st.subheader("🔍 Overview")
-#     # Total bidders
-#     total_sheets = len(all_df)
-#     # st.caption(f"You're analyzing offers from **{total_sheets} participating bidders** in this session 🧐")
+    # # OVERVIEW
+    # # st.subheader("🔍 Overview")
+    # # Total bidders
+    # total_sheets = len(all_df)
+    # # st.caption(f"You're analyzing offers from **{total_sheets} participating bidders** in this session 🧐")
 
-#     result = {}
+    # result = {}
 
-#     for name, df in all_df.items():
-#         rows_before, cols_before = df.shape
-#         # Data cleaning
-#         df_clean = df.replace(r'^\s*$', None, regex=True)
-#         df_clean = df_clean.dropna(how="all", axis=0).dropna(how="all", axis=1)
+    # for name, df in all_df.items():
+    #     rows_before, cols_before = df.shape
+    #     # Data cleaning
+    #     df_clean = df.replace(r'^\s*$', None, regex=True)
+    #     df_clean = df_clean.dropna(how="all", axis=0).dropna(how="all", axis=1)
 
-#         rows_after, cols_after = df_clean.shape
+    #     rows_after, cols_after = df_clean.shape
 
-#         # Gunakan baris pertama sebagai header (hanya jika kolom belum ada nama atau Unnamed)
-#         if any("Unnamed" in str(c) for c in df_clean.columns):
-#             df_clean.columns = df_clean.iloc[0]
-#             df_clean = df_clean[1:].reset_index(drop=True)
+    #     # Gunakan baris pertama sebagai header (hanya jika kolom belum ada nama atau Unnamed)
+    #     if any("Unnamed" in str(c) for c in df_clean.columns):
+    #         df_clean.columns = df_clean.iloc[0]
+    #         df_clean = df_clean[1:].reset_index(drop=True)
 
-#         # Konversi tipe data otomatis
-#         df_clean = df_clean.convert_dtypes()
+    #     # Konversi tipe data otomatis
+    #     df_clean = df_clean.convert_dtypes()
 
-#         # Bersihkan tipe numpy di kolom, index, dan isi
-#         def safe_convert(x):
-#             if isinstance(x, (np.generic, np.number)):
-#                 return x.item()
-#             return x
+    #     # Bersihkan tipe numpy di kolom, index, dan isi
+    #     def safe_convert(x):
+    #         if isinstance(x, (np.generic, np.number)):
+    #             return x.item()
+    #         return x
 
-#         df_clean = df_clean.map(safe_convert)
-#         df_clean.columns = [safe_convert(c) for c in df_clean.columns]
-#         df_clean.index = [safe_convert(i) for i in df_clean.index]
+    #     df_clean = df_clean.map(safe_convert)
+    #     df_clean.columns = [safe_convert(c) for c in df_clean.columns]
+    #     df_clean.index = [safe_convert(i) for i in df_clean.index]
 
-#         # Paksa semua header & index ke string agar JSON safe
-#         df_clean.columns = df_clean.columns.map(str)
-#         df_clean.index = df_clean.index.map(str)
+    #     # Paksa semua header & index ke string agar JSON safe
+    #     df_clean.columns = df_clean.columns.map(str)
+    #     df_clean.index = df_clean.index.map(str)
 
 #         # Pembulatan
 #         num_cols = df_clean.select_dtypes(include=["number"]).columns
