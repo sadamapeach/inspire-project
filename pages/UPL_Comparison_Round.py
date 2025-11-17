@@ -780,279 +780,109 @@ def page():
 
     # VISUALIZATIONN
     st.markdown("##### 📊 Visualization")
+    tab1, tab2 = st.tabs(["Win Rate Trend", "Price Trend"])
 
+    # WIN RATE TRENDD
+    # Gabungkan semua round
+    df_all = df_analysis_summary.copy()
 
-#     # # TABEL JUMLAH KEMENANGAN
-#     # st.markdown("##### Trend of Vendor Wins Across Rounds")
-#     # st.caption("This line chart visualization shows how vendor wins change across bidding rounds and highlights consistent leaders.")
+    # --- Normalisasi nama vendor (biar konsisten) ---
+    df_all["1st Vendor"] = (
+        df_all["1st Vendor"]
+        .astype(str)
+        .str.strip()      # hilangkan spasi depan/belakang
+        .str.upper()      # ubah ke huruf besar semua
+    )
 
-#     # # Line Chart Visualization
-#     # # Gabungkan semua round
-#     # df_all = pd.concat(df_all_rounds, ignore_index=True)
+    # --- Hitung jumlah kemenangan per vendor per round ---
+    win_summary = (
+        df_all.groupby(["ROUND", "1st Vendor"])
+            .size()
+            .reset_index(name="Wins")
+            .rename(columns={"1st Vendor": "VENDOR"})
+    )
 
-#     # # --- Normalisasi nama vendor (biar konsisten) ---
-#     # df_all["1st Vendor"] = (
-#     #     df_all["1st Vendor"]
-#     #     .astype(str)
-#     #     .str.strip()      # hilangkan spasi depan/belakang
-#     #     .str.upper()      # ubah ke huruf besar semua
-#     # )
+    # --- Urutkan round ---
+    round_order = sorted(df_all["ROUND"].unique(), key=lambda x: str(x))
+    win_summary["ROUND"] = pd.Categorical(win_summary["ROUND"], categories=round_order, ordered=True)
 
-#     # # --- Hitung jumlah kemenangan per vendor per round ---
-#     # win_summary = (
-#     #     df_all.groupby(["Round", "1st Vendor"])
-#     #         .size()
-#     #         .reset_index(name="Wins")
-#     #         .rename(columns={"1st Vendor": "Vendor"})
-#     # )
+    # --- Tambahan: pastikan kombinasi Round–Vendor yang hilang diisi 0 ---
+    all_rounds = win_summary["ROUND"].unique()
+    all_vendors = win_summary["VENDOR"].unique()
 
-#     # # --- Urutkan round ---
-#     # round_order = sorted(df_all["Round"].unique(), key=lambda x: str(x))
-#     # win_summary["Round"] = pd.Categorical(win_summary["Round"], categories=round_order, ordered=True)
+    # Buat semua kombinasi round–vendor
+    full_index = pd.MultiIndex.from_product([all_rounds, all_vendors], names=["ROUND", "VENDOR"])
+    win_summary = (
+        win_summary.set_index(["ROUND", "VENDOR"])
+        .reindex(full_index, fill_value=0)
+        .reset_index()
+    )
 
-#     # # --- Tambahan: pastikan kombinasi Round–Vendor yang hilang diisi 0 ---
-#     # all_rounds = win_summary["Round"].unique()
-#     # all_vendors = win_summary["Vendor"].unique()
+    # --- Buat chart dengan Altair ---
+    y_min = win_summary["Wins"].min()
+    y_max = win_summary["Wins"].max()
 
-#     # # Buat semua kombinasi round–vendor
-#     # full_index = pd.MultiIndex.from_product([all_rounds, all_vendors], names=["Round", "Vendor"])
-#     # win_summary = (
-#     #     win_summary.set_index(["Round", "Vendor"])
-#     #     .reindex(full_index, fill_value=0)
-#     #     .reset_index()
-#     # )
+    # --- Hitung total kemenangan per vendor ---
+    vendor_order = (
+        win_summary.groupby("VENDOR")["Wins"]
+        .sum()
+        .sort_values(ascending=False)
+        .index.tolist()
+    )
 
-#     # # --- Buat chart dengan Altair ---
-#     # y_min = win_summary["Wins"].min()
-#     # y_max = win_summary["Wins"].max()
+    chart = (
+        alt.Chart(win_summary)
+        .mark_line(point=True)
+        .encode(
+            x=alt.X("ROUND:N", sort=round_order, title="Round"),
+            y=alt.Y(
+                "Wins:Q", 
+                title="Number of Wins",
+                scale=alt.Scale(domain=[y_min - 1.5, y_max + 1.5]),
+                axis=alt.Axis(
+                    tickMinStep=1,
+                    tickCount=win_summary["Wins"].nunique() + 1
+                )
+            ),
+            color=alt.Color("VENDOR:N", title="VENDOR", sort=vendor_order)
+        )
+        .properties(
+            height=400,
+            width="container",
+            title="Winning Performance Across Rounds"
+        ).configure_title(
+            anchor='middle', 
+            offset=12
+        )
+        .configure_view(stroke='gray', strokeWidth=1)
+        .configure_point(size=60)
+        .configure_axis(labelFontSize=12, titleFontSize=13)
+        .configure_legend(
+            titleFontSize=12,        
+            titleFontWeight="bold",  
+            labelFontSize=12,        
+            labelLimit=300,   
+            orient="right"
+        )
+    )
 
-#     # # --- Hitung total kemenangan per vendor ---
-#     # vendor_order = (
-#     #     win_summary.groupby("Vendor")["Wins"]
-#     #     .sum()
-#     #     .sort_values(ascending=False)
-#     #     .index.tolist()
-#     # )
+    # Table
+    win_table = (
+        win_summary
+        .pivot_table(
+            index="VENDOR",
+            columns="ROUND",
+            values="Wins",
+            aggfunc="sum",
+            fill_value=0,
+            observed=False
+        ).reset_index()
+    )
 
-#     # chart = (
-#     #     alt.Chart(win_summary)
-#     #     .mark_line(point=True)
-#     #     .encode(
-#     #         x=alt.X("Round:N", sort=round_order, title="Round"),
-#     #         y=alt.Y(
-#     #             "Wins:Q", 
-#     #             title="Number of Wins",
-#     #             scale=alt.Scale(domain=[y_min - 1.5, y_max + 1.5]),
-#     #             axis=alt.Axis(
-#     #                 tickMinStep=1,
-#     #                 tickCount=win_summary["Wins"].nunique() + 1
-#     #             )
-#     #         ),
-#     #         color=alt.Color("Vendor:N", title="Vendor", sort=vendor_order)
-#     #     )
-#     #     .properties(
-#     #         height=400,
-#     #         width="container",
-#     #         title="Winning Performance Across Rounds"
-#     #     ).configure_title(
-#     #         anchor='middle', 
-#     #         offset=12
-#     #     )
-#     #     .configure_view(stroke='gray', strokeWidth=1)
-#     #     .configure_point(size=60)
-#     #     .configure_axis(labelFontSize=12, titleFontSize=13)
-#     #     .configure_legend(
-#     #         titleFontSize=12,        
-#     #         titleFontWeight="bold",  
-#     #         labelFontSize=12,        
-#     #         labelLimit=300,   
-#     #         orient="right"
-#     #     )
-#     # )
+    # Urutkan vendor berdasarkan total kemenangan
+    win_table["Total Wins"] = win_table.drop(columns="VENDOR").sum(axis=1)
+    win_table = win_table.sort_values("Total Wins", ascending=False).reset_index(drop=True)
 
-#     # # Table
-#     # win_table = (
-#     #     win_summary
-#     #     .pivot_table(
-#     #         index="Vendor",
-#     #         columns="Round",
-#     #         values="Wins",
-#     #         aggfunc="sum",
-#     #         fill_value=0,
-#     #         observed=False
-#     #     ).reset_index()
-#     # )
-
-#     # # Urutkan vendor berdasarkan total kemenangan
-#     # win_table["Total Wins"] = win_table.drop(columns="Vendor").sum(axis=1)
-#     # win_table = win_table.sort_values("Total Wins", ascending=False).reset_index(drop=True)
-
-#     # # st.dataframe(win_table, hide_index=True)
-#     # st.altair_chart(chart)
-#     # st.dataframe(win_table, hide_index=True)
-
-#     # # Price Movement
-#     # st.write(" ")
-#     # st.markdown("##### 🌍 Trend of Price Movement per Scope")
-
-#     # col_vendor = df.columns[0]
-#     # col_round  = df.columns[1]
-#     # col_scope  = df.columns[2]
-#     # col_price  = df.columns[3]
-
-#     # # --- Normalisasi nama vendor biar konsisten ---
-#     # df[col_vendor] = (
-#     #     df[col_vendor]
-#     #     .astype(str)
-#     #     .str.strip()      # Hilangkan spasi depan/belakang
-#     #     .str.upper()      # Ubah ke huruf besar semua
-#     # )
-
-#     # # --- Tab per vendor
-#     # vendors = df[col_vendor].unique()
-#     # tabs = st.tabs([f"{v}" for v in vendors])
-
-#     # # Inisialisasi list untuk simpan hasil semua vendor
-#     # df_all_vendors = []
-
-#     # for i, v in enumerate(vendors):
-#     #     with tabs[i]:
-#     #         # Filter data vendor
-#     #         df_vendor = df[df[col_vendor] == v].copy().reset_index(drop=True)
-
-#     #         # Tambahkan kolom order untuk handle duplicate Scope
-#     #         df_vendor["__order"] = df_vendor.groupby([col_scope, col_round]).cumcount()
-
-#     #         # Pivot: scope sebagai index, round sebagai kolom, value = UPL
-#     #         df_pivot = (
-#     #             df_vendor
-#     #             .pivot_table(
-#     #                 index=[col_scope, "__order"],
-#     #                 columns=col_round,
-#     #                 values=col_price,
-#     #                 aggfunc="first",
-#     #                 sort=False
-#     #             )
-#     #             .fillna(0)
-#     #             .reset_index()
-#     #         )
-
-#     #         # Pembulatan
-#     #         def round_half_up(n):
-#     #             if pd.isna(n):
-#     #                 return n
-#     #             try:
-#     #                 return int(Decimal(str(n)).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
-#     #             except:
-#     #                 return n
-            
-#     #         # Terapkan pembulatan
-#     #         num_cols = [c for c in df_pivot.columns if c not in [col_scope, "__order"]]
-#     #         for c in num_cols:
-#     #             df_pivot[c] = df_pivot[c].apply(lambda x: round_half_up(x) if pd.notna(x) else x)
-
-#     #         # Tambahkan kolom chart (list dari tiap baris)
-#     #         # df_pivot["Price Trend"] = df_pivot[[c for c in num_cols if c != "__order"]].values.tolist()
-#     #         df_pivot["Price Trend"] = (
-#     #             df_pivot[[c for c in num_cols if c != "__order"]]
-#     #             .apply(lambda x: str(list(x)), axis=1)
-#     #         )
-
-#     #         # Ambil hanya kolom numerik (rounds) untuk hitung min/max
-#     #         numeric_cols = df_pivot.select_dtypes(include="number").columns
-#     #         if len(numeric_cols) > 0:
-#     #             y_min = int(df_pivot[numeric_cols].min().min())
-#     #             y_max = int(df_pivot[numeric_cols].max().max())
-#     #         else:
-#     #             y_min, y_max = 0, 0
-
-#     #         # Hapus kolom pembantu dan urutkan ulang
-#     #         df_pivot = df_pivot.sort_values(["__order", col_scope]).drop(columns="__order").reset_index(drop=True)
-
-#     #         # Urutkan scope sesuai kemunculan awal
-#     #         scope_order = df_vendor[col_scope].drop_duplicates()
-#     #         df_pivot = df_pivot.set_index(col_scope).loc[scope_order].reset_index()
-
-#     #         # MENAMBAHKAN SLICER
-#     #         all_scope = sorted(df_pivot[col_scope].dropna().unique())
-#     #         selected_scope = st.multiselect(
-#     #             f"Filter: {col_scope}",
-#     #             options=all_scope,
-#     #             default=None,
-#     #             placeholder="Choose one or more scope",
-#     #             key=f"scope_filter_{v}"
-#     #         )
-
-#     #         # --- Terapkan filter kalau user memilih scope
-#     #         if selected_scope:
-#     #             df_filtered = df_pivot[df_pivot[col_scope].isin(selected_scope)]
-#     #         else:
-#     #             df_filtered = df_pivot  # tampilkan semua kalau belum difilter
-
-#     #         df_styled = df_filtered.copy()
-#     #         def format_thousand(value):
-#     #             """Format angka ke format Indonesia (1.000.000), hilangkan 0 jadi kosong."""
-#     #             try:
-#     #                 if pd.isna(value) or value == 0:
-#     #                     return ""  # kosongkan nilai 0 atau NaN
-#     #                 return f"{int(value):,}".replace(",", ".")
-#     #             except (ValueError, TypeError):
-#     #                 return value
-                
-#     #         # Pilih kolom round (semua numerik kecuali kolom scope dan Price Trend)
-#     #         round_cols = [c for c in df_styled.columns if c not in [col_scope, "Price Trend"]]
-
-#     #         # Terapkan format ribuan
-#     #         for c in round_cols:
-#     #             df_styled[c] = df_styled[c].apply(format_thousand)
-
-#     #         # Fungsi styling untuk highlight pink pada nilai kosong (bekas 0)
-#     #         def highlight_zero(val):
-#     #             if val == "":
-#     #                 return "background-color: #f8c8dc"
-#     #             return ""
-            
-#     #         # Terapkan styling ke kolom round saja
-#     #         df_styled = df_styled.style.map(highlight_zero, subset=round_cols)
-
-#     #         # --- Tampilkan tabel dengan konfigurasi kolom Streamlit ---
-#     #         st.caption(f"✨ Total number of data entries: **{len(df_filtered)}**")
-#     #         st.dataframe(
-#     #             df_styled,
-#     #             hide_index=True,
-#     #             column_config={
-#     #                 col_scope: "Scope",
-#     #                 "Price Trend": st.column_config.LineChartColumn(
-#     #                     "Price Trend",
-#     #                     help="Shows price changes across rounds",
-#     #                     y_min=y_min,
-#     #                     y_max=y_max,
-#     #                 ),
-#     #             }
-#     #         )
-
-#     #         # Simpan hasil (opsional)
-#     #         df_all_vendors.append(df_pivot)
-
-#     #         # Download button to Excel
-#     #         @st.cache_data
-#     #         def get_excel_download(df_filtered, sheet_name="Trend of Price Movement per Scope"):
-#     #             output = BytesIO()
-#     #             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-#     #                 df_filtered.to_excel(writer, index=False, sheet_name=sheet_name)
-#     #             return output.getvalue()
-            
-#     #         # Simpan hasil ke variabel
-#     #         excel_data = get_excel_download(df_filtered, sheet_name=f"{v}")
-
-#     #         # Layout
-#     #         col1, col2, col3 = st.columns([3,1,1])
-#     #         with col3:
-#     #             st.download_button(
-#     #                 label="Download",
-#     #                 data=excel_data,
-#     #                 file_name=f"Trend of Price Movement per Scope ({v}).xlsx",
-#     #                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-#     #                 icon=":material/download:",
-#     #                 key=f"download_{v}"  # unik per tab
-#     #             )
+    # st.dataframe(win_table, hide_index=True)
+    tab1.altair_chart(chart)
+    tab1.dataframe(win_table, hide_index=True)
