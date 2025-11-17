@@ -606,184 +606,181 @@ def page():
 
     st.divider()
 
-#     # st.subheader("🧮 Round: Lowest Price & Gap (%)")
+    # PRICE MOVEMENTT ANALYSISS
+    st.markdown("##### 💸 Price Movement Analysis")
 
-#     # col_vendor = df.columns[0]
-#     # col_round  = df.columns[1]
-#     # col_scope  = df.columns[2]
-#     # col_price  = df.columns[3]
+    round_col  = raw_transpose.columns[0]
+    vendor_col = raw_transpose.columns[1]
+    scope_cols = raw_transpose.columns[2:-1]
+    price_col  = raw_transpose.columns[-1]
 
-#     # # --- Tab per round
-#     # rounds = df[col_round].unique()
-#     # tabs = st.tabs([f"{r}" for r in rounds])
+    df = raw_transpose.copy()
 
-#     # # Inisialisasi list untuk simpan hasil semua round
-#     # df_all_rounds = []
+    # Standardisasi vendor
+    df[vendor_col] = df[vendor_col].astype(str).str.strip().str.upper()
 
-#     # for i, r in enumerate(rounds):
-#     #     with tabs[i]:
-#     #         df_r = df[df[col_round] == r].copy().reset_index(drop=True)
+    # Simpan urutan Scope
+    df["SCOPE_KEY"] = df[scope_cols].astype(str).agg("|".join, axis=1)
+    scope_order_map = (
+        df.drop_duplicates([vendor_col, "SCOPE_KEY"])
+        .groupby(vendor_col)["SCOPE_KEY"]
+        .apply(list)
+        .to_dict()
+    )
 
-#     #         # --- Tambah kolom order untuk handle duplicate Scope per vendor
-#     #         df_r["__order"] = df_r.groupby([col_scope, col_vendor]).cumcount()
+    # Pivot
+    df["SCOPE_KEY"] = df[scope_cols].astype(str).agg("|".join, axis=1)
 
-#     #         # --- Pivot horizontal: Scope di baris, Vendor di kolom
-#     #         df_pivot = df_r.pivot_table(
-#     #             index=[col_scope, "__order"],
-#     #             columns=col_vendor,
-#     #             values=col_price,
-#     #             aggfunc="first"
-#     #         ).reset_index()
+    df_pivot = df.pivot_table(
+        index=[vendor_col, "SCOPE_KEY"],
+        columns=round_col,
+        values=price_col,
+        aggfunc="mean"
+    ).reset_index()
 
-#     #         # Vendor columns
-#     #         vendor_cols = [c for c in df_pivot.columns if c not in [col_scope, "__order"]]
+    # Pisahkan kembali SCOPE_KEY ke kolom dinamis
+    df_pivot[scope_cols] = df_pivot["SCOPE_KEY"].str.split("|", expand=True)
 
-#     #         # --- Pastikan semua numeric, coerce errors
-#     #         df_pivot[vendor_cols] = df_pivot[vendor_cols].apply(pd.to_numeric, errors='coerce')
+    # Urutkan round sesuai data
+    round_order = list(df[round_col].unique())
+    df_pivot = df_pivot[[vendor_col, "SCOPE_KEY", *scope_cols, *round_order]]
 
-#     #         # --- Hitung 1st & 2nd lowest
-#     #         def first_second(row):
-#     #             s = row[vendor_cols].dropna()
-#     #             if len(s) == 0:
-#     #                 return np.nan, np.nan, np.nan, np.nan
-#     #             elif len(s) == 1:
-#     #                 return s.iloc[0], s.index[0], np.nan, np.nan
-#     #             # Gunakan sort_values karena nsmallest kadang error jika dtype object
-#     #             ns = s.sort_values().iloc[:2]
-#     #             return ns.iloc[0], ns.index[0], ns.iloc[1], ns.index[1]
+    # Sorting sesuai urutan asli
+    df_pivot["SCOPE_ORDER"] = df_pivot.apply(
+        lambda row: scope_order_map[row[vendor_col]].index(row["SCOPE_KEY"])
+        if row["SCOPE_KEY"] in scope_order_map[row[vendor_col]] else 9999,
+        axis=1
+    )
 
-#     #         res = df_pivot.apply(first_second, axis=1)
-#     #         df_pivot["1st Lowest"] = res.apply(lambda x: x[0])
-#     #         df_pivot["1st Vendor"] = res.apply(lambda x: x[1])
-#     #         df_pivot["2nd Lowest"] = res.apply(lambda x: x[2])
-#     #         df_pivot["2nd Vendor"] = res.apply(lambda x: x[3])
+    df_pivot = df_pivot.sort_values([vendor_col, "SCOPE_ORDER"]).drop(columns=["SCOPE_ORDER"])
 
-#     #         # --- Hitung Gap 1 to 2 (%)
-#     #         def calc_gap(row):
-#     #             a, b = row["1st Lowest"], row["2nd Lowest"]
-#     #             if pd.isna(a) or pd.isna(b) or a == 0:
-#     #                 return ""
-#     #             return f"{int(round((b-a)/a*100,0))}%"
+    # PRICE REDUCTION
+    def compute_price_reduction(row):
+        prices = row[round_order]
+        valid_prices = prices.dropna()
 
-#     #         df_pivot["Gap 1 to 2 (%)"] = df_pivot.apply(calc_gap, axis=1)
+        if len(valid_prices) < 2:
+            return pd.Series({
+                "PRICE REDUCTION (VALUE)": np.nan, 
+                "PRICE REDUCTION (%)": np.nan
+            })
 
-#     #         def round_half_up(n):
-#     #             if pd.isna(n):
-#     #                 return n
-#     #             return int(Decimal(n).quantize(0, rounding=ROUND_HALF_UP))
+        first_val = valid_prices.iloc[0]
+        last_val  = valid_prices.iloc[-1]
 
-#     #         for c in vendor_cols + ["1st Lowest","2nd Lowest"]:
-#     #             df_pivot[c] = df_pivot[c].apply(
-#     #                 lambda x: f"{round_half_up(x):,}".replace(",", ".") if pd.notna(x) else ""
-#     #             )
+        reduction_value = last_val - first_val
+        reduction_pct   = (reduction_value / first_val) * 100
 
-#     #         # --- Kembalikan urutan & hapus kolom pembantu
-#     #         df_pivot = df_pivot.sort_values(["__order", col_scope]).drop(columns="__order").reset_index(drop=True)
+        return pd.Series({
+            "PRICE REDUCTION (VALUE)": reduction_value,
+            "PRICE REDUCTION (%)": round(reduction_pct, 2)
+        }) 
+    
+    df_pivot[["PRICE REDUCTION (VALUE)", "PRICE REDUCTION (%)"]] = (
+        df_pivot.apply(compute_price_reduction, axis=1)
+    )
 
-#     #         # --- Urutkan kolom akhir
-#     #         ordered_cols = [col_scope] + vendor_cols + ["1st Lowest","1st Vendor","2nd Lowest","2nd Vendor","Gap 1 to 2 (%)"]
-#     #         df_pivot = df_pivot[ordered_cols]
+    # PRICE TREND
+    def detect_trend(row):
+        prices = row[round_order].values.astype(float)
+        prices = prices[~np.isnan(prices)]
 
-#     #         # Urutkan scope sesuai urutan kemunculan di df_r
-#     #         scope_order = df_r[col_scope].drop_duplicates()
-#     #         df_pivot = df_pivot.set_index(col_scope).loc[scope_order].reset_index()
+        if len(prices) <= 1:
+            return "Insufficient Data"
+        if all(prices[i] > prices[i+1] for i in range(len(prices)-1)):
+            return "Consistently Down"
+        if all(prices[i] < prices[i+1] for i in range(len(prices)-1)):
+            return "Consistently Up"
+        if len(set(prices)) == 1:
+            return "No Change"
+        
+        return "Fluctuating"
+    
+    df_pivot["PRICE TREND"] = df_pivot.apply(detect_trend, axis=1)
 
-#     #         # LINE CHART (simpan semua hasil df_pivot + info round)
-#     #         df_line_chart = df_pivot.copy()
-#     #         df_line_chart["Round"] = r
-#     #         df_all_rounds.append(df_line_chart)
+    # PRICE STABILITY INDEX (PSI)
+    def compute_psi(row):
+        prices = row[round_order].astype(float)
+        prices = prices[~np.isnan(prices)]
+        if len(prices) == 0:
+            return np.nan
+        return ((prices.max() - prices.min()) / prices.mean()) * 100
+    
+    df_pivot["STANDARD DEVIATION"] = df_pivot[round_order].std(axis=1, ddof=0).round(4)
+    df_pivot["PRICE STABILITY INDEX (%)"] = df_pivot.apply(compute_psi, axis=1).round(2)
 
-#     #         # --- 🎯 Tambahkan dua slicer terpisah untuk 1st Vendor dan 2nd Vendor
-#     #         all_1st = sorted(df_pivot["1st Vendor"].dropna().unique())
-#     #         all_2nd = sorted(df_pivot["2nd Vendor"].dropna().unique())
+    # Hapus helper column
+    df_pivot = df_pivot.drop(columns=["SCOPE_KEY"])
 
-#     #         col_sel_1, col_sel_2 = st.columns(2)
-#     #         with col_sel_1:
-#     #             selected_1st = st.multiselect(
-#     #                 "Filter: 1st vendor",
-#     #                 options=all_1st,
-#     #                 default=None,
-#     #                 placeholder="Choose one or more vendors",
-#     #                 key=f"filter_1st_vendor_{r}"
-#     #             )
-#     #         with col_sel_2:
-#     #             selected_2nd = st.multiselect(
-#     #                 "Filter: 2nd vendor",
-#     #                 options=all_2nd,
-#     #                 default=None,
-#     #                 placeholder="Choose one or more vendors",
-#     #                 key=f"filter_2nd_vendor_{r}"
-#     #             )
+    # Tambahkan slicer 
+    all_vendor = sorted(df_pivot[vendor_col].dropna().unique())
+    all_trend  = sorted(df_pivot["PRICE TREND"].dropna().unique())
 
-#     #         # --- Terapkan filter dengan logika AND
-#     #         if selected_1st and selected_2nd:
-#     #             df_filtered = df_pivot[
-#     #                 df_pivot["1st Vendor"].isin(selected_1st) &
-#     #                 df_pivot["2nd Vendor"].isin(selected_2nd)
-#     #             ]
-#     #         elif selected_1st:
-#     #             df_filtered = df_pivot[df_pivot["1st Vendor"].isin(selected_1st)]
-#     #         elif selected_2nd:
-#     #             df_filtered = df_pivot[df_pivot["2nd Vendor"].isin(selected_2nd)]
-#     #         else:
-#     #             df_filtered = df_pivot.copy()
+    col_sel_1, col_sel_2 = st.columns(2)
+    with col_sel_1:
+        selected_vendor = st.multiselect(
+            "Filter: Vendor",
+            options=all_vendor,
+            default=None,
+            placeholder="Choose one or more vendors",
+            key="filter_vendor"
+        )
+    with col_sel_2:
+        selected_trend = st.multiselect(
+            "Filter: Price Trend",
+            options=all_trend,
+            default=None,
+            placeholder="Choose one or more price trends",
+            key="filter_price_trend"
+        )
 
-#     #         # --- Styling function untuk highlight
-#     #         def highlight_winners(row):
-#     #             styles = [""] * len(row)
-#     #             if "1st Vendor" in row and "2nd Vendor" in row:
-#     #                 for i, col in enumerate(df_pivot.columns):
-#     #                     if col == row["1st Vendor"]:
-#     #                         styles[i] = "background-color: #d7c6f3; color: #402e72; font-weight: bold;"
-#     #                         # styles[i] = "background-color: #b7e4c7; color: #1b4332; font-weight: bold;"
-#     #                     elif col == row["2nd Vendor"]:
-#     #                         styles[i] = "background-color: #f8c8dc; color: #7a1f47; font-weight: bold;"
-#     #                         # styles[i] = "background-color: #fff3b0; color: #665c00; font-weight: bold;"
-#     #             return styles
+    # Terapkan filter dengan logika AND
+    if selected_vendor and selected_trend:
+        df_filter_pivot = df_pivot[
+            df_pivot["VENDOR"].isin(selected_vendor) &
+            df_pivot["PRICE TREND"].isin(selected_trend)
+        ]
+    elif selected_vendor:
+        df_filter_pivot = df_pivot[df_pivot["VENDOR"].isin(selected_vendor)]
+    elif selected_trend:
+        df_filter_pivot = df_pivot[df_pivot["PRICE TREND"].isin(selected_trend)]
+    else:
+        df_filter_pivot = df_pivot.copy()
 
-#     #         # --- Terapkan styling (setelah df_pivot final)
-#     #         styled_df = df_filtered.style.apply(highlight_winners, axis=1)
+    # Format
+    num_cols = df_filter_pivot.select_dtypes(include=["number"]).columns
+    format_dict = {col: format_rupiah for col in num_cols}
+    format_dict.update({
+        "PRICE REDUCTION (%)": "{:+.1f}%",
+        "PRICE STABILITY INDEX (%)": "{:.1f}%"
+    })
 
-#     #         st.caption(f"✨ Total number of data entries: **{len(df_filtered)}**")
-#     #         st.dataframe(styled_df, hide_index=True)
+    df_pivot_style = (
+        df_filter_pivot.style
+        .format(format_dict)
+    )
 
-#     #         # --- Buat salinan numerik untuk ekspor ---
-#     #         df_export = df_filtered.copy()
+    # Tampilkan
+    st.caption(f"✨ Total number of data entries: **{len(df_filter_pivot)}**")
+    st.dataframe(df_pivot_style, hide_index=True)
 
-#     #         # Ubah kolom angka dari format teks ke numerik kembali
-#     #         numeric_cols = vendor_cols + ["1st Lowest", "2nd Lowest"]
-#     #         for c in numeric_cols:
-#     #             df_export[c] = (
-#     #                 df_export[c]
-#     #                 .replace({r"\.": "", r",": "."}, regex=True)   # hilangkan pemisah ribuan, ubah koma jadi titik jika ada
-#     #                 .replace("", np.nan)
-#     #                 .astype(float)
-#     #             )
+    # Simpan hasil ke variabel
+    excel_data = get_excel_download(df_filter_pivot)
 
-#     #         # Download button to Excel
-#     #         @st.cache_data
-#     #         def get_excel_download(df_export, sheet_name="Lowest Price & Gap (%)"):
-#     #             output = BytesIO()
-#     #             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-#     #                 df_export.to_excel(writer, index=False, sheet_name=sheet_name)
-#     #             return output.getvalue()
+    # Layout tombol (rata kanan)
+    col1, col2, col3 = st.columns([2.3,2,1])
+    with col3:
+        st.download_button(
+            label="Download",
+            data=excel_data,
+            file_name="Price Movement Trend.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            icon=":material/download:"
+        )
 
-#     #         # Simpan hasil ke variabel
-#     #         excel_data = get_excel_download(df_export, sheet_name=f"Round_{r}")
+    # VISUALIZATIONN
+    st.markdown("##### 📊 Visualization")
 
-#     #         # Layout tombol (rata kanan)
-#     #         col1, col2, col3 = st.columns([3,1,1])
-#     #         with col3:
-#     #             st.download_button(
-#     #                 label="Download",
-#     #                 data=excel_data,
-#     #                 file_name=f"Lowest Price & Gap ({r}).xlsx",
-#     #                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-#     #                 icon=":material/download:",
-#     #                 key=f"download_{r}"  # unik per tab
-#     #             )
-
-#     # st.write("")
 
 #     # # TABEL JUMLAH KEMENANGAN
 #     # st.markdown("##### Trend of Vendor Wins Across Rounds")
@@ -896,7 +893,7 @@ def page():
 
 #     # # Price Movement
 #     # st.write(" ")
-#     # st.markdown("##### Trend of Price Movement per Scope")
+#     # st.markdown("##### 🌍 Trend of Price Movement per Scope")
 
 #     # col_vendor = df.columns[0]
 #     # col_round  = df.columns[1]
@@ -1058,117 +1055,4 @@ def page():
 #     #                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 #     #                 icon=":material/download:",
 #     #                 key=f"download_{v}"  # unik per tab
-#     #             )
-
-#     # # MEDIAN
-#     # st.subheader("🎯 Round: Bidder to Median (%)")
-
-#     # col_vendor = df.columns[0]
-#     # col_round  = df.columns[1]
-#     # col_scope  = df.columns[2]
-#     # col_price  = df.columns[3]
-
-#     # # --- Tab per round
-#     # rounds = df[col_round].unique()
-#     # tabs = st.tabs([f"{r}" for r in rounds])
-
-#     # for i, r in enumerate(rounds):
-#     #     with tabs[i]:
-#     #         df_r = df[df[col_round] == r].copy().reset_index(drop=True)
-
-#     #         # --- Tambah kolom order untuk handle duplicate Scope per vendor
-#     #         df_r["__order"] = df_r.groupby([col_scope, col_vendor]).cumcount()
-
-#     #         # --- Pivot horizontal: Scope di baris, Vendor di kolom
-#     #         df_pivot = df_r.pivot_table(
-#     #             index=[col_scope, "__order"],
-#     #             columns=col_vendor,
-#     #             values=col_price,
-#     #             aggfunc="first"
-#     #         ).reset_index()
-
-#     #         vendor_cols = [c for c in df_pivot.columns if c not in [col_scope, "__order"]]
-
-#     #         # Pastikan numeric
-#     #         df_pivot[vendor_cols] = df_pivot[vendor_cols].apply(pd.to_numeric, errors='coerce')
-
-#     #         # --- Hitung median per baris
-#     #         df_pivot["Median"] = df_pivot[vendor_cols].median(axis=1).round().astype("Int64")
-
-#     #         # --- Fungsi pembulatan (half up)
-#     #         def round_half_up(n):
-#     #             if pd.isna(n):
-#     #                 return n
-#     #             return float(Decimal(n).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP))
-
-#     #         # --- Hitung deviasi tiap vendor terhadap median
-#     #         for v in vendor_cols:
-#     #             df_pivot[f"{v} to Median (%)"] = df_pivot.apply(
-#     #                 lambda row: (
-#     #                     f"{round_half_up(((row[v] - row['Median']) / row['Median']) * 100)}%"
-#     #                     if pd.notna(row[v]) and pd.notna(row['Median']) and row['Median'] != 0
-#     #                     else ""
-#     #                 ),
-#     #                 axis=1
-#     #             )
-
-#     #         # --- Urutkan & rapikan kolom
-#     #         ordered_cols = [col_scope] + ["Median"] + [f"{v} to Median (%)" for v in vendor_cols]
-#     #         df_pivot = df_pivot[ordered_cols]
-
-#     #         # --- Urutkan scope sesuai urutan kemunculan di df_r
-#     #         scope_order = df_r[col_scope].drop_duplicates()
-#     #         df_pivot = df_pivot.set_index(col_scope).loc[scope_order].reset_index()
-
-#     #         # Buat df_export2 untuk donwload
-#     #         df_export2 = df_pivot.copy()
-
-#     #         # Pemisah ribuan titik
-#     #         df_pivot["Median"] = df_pivot["Median"].apply(
-#     #             lambda x: f"{x:,.0f}".replace(",", ".") if pd.notna(x) else ""
-#     #         )
-
-#     #         # --- Highlight vendor dengan deviasi terkecil (paling negatif)
-#     #         def highlight_lowest(row):
-#     #             styles = [""] * len(row)
-#     #             values = [
-#     #                 float(str(row[f"{v} to Median (%)"]).replace("%", "")) 
-#     #                 if str(row[f"{v} to Median (%)"]).replace("%", "").strip() != "" 
-#     #                 else np.nan
-#     #                 for v in vendor_cols
-#     #             ]
-#     #             if all(np.isnan(values)):
-#     #                 return styles
-#     #             min_val = np.nanmin(values)
-#     #             for idx, val in enumerate(values):
-#     #                 if val == min_val:
-#     #                     styles[idx + 2] = "background-color: #f8c8dc; color: #7a1f47; font-weight: bold;"
-#     #             return styles
-
-#     #         styled_df = df_pivot.style.apply(highlight_lowest, axis=1)
-
-#     #         st.caption(f"Round **{r}** contains **{len(df_pivot)} scopes** for median analysis!")
-#     #         st.dataframe(styled_df, hide_index=True)
-
-#     #         # Download button to Excel
-#     #         @st.cache_data
-#     #         def get_excel_download(df_export2, sheet_name="Median Analysis (%)"):
-#     #             output = BytesIO()
-#     #             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-#     #                 df_export2.to_excel(writer, index=False, sheet_name=sheet_name)
-#     #             return output.getvalue()
-
-#     #         # Simpan hasil ke variabel
-#     #         excel_data = get_excel_download(df_export2, sheet_name=f"Round_{r}")
-
-#     #         # Layout tombol (rata kanan)
-#     #         col1, col2, col3 = st.columns([3,1,1])
-#     #         with col3:
-#     #             st.download_button(
-#     #                 label="Download",
-#     #                 data=excel_data,
-#     #                 file_name=f"Median Analysis (%) ({r}).xlsx",
-#     #                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-#     #                 icon=":material/download:",
-#     #                 key=f"download_med_{r}"  # unik per tab
 #     #             )
