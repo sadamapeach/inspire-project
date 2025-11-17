@@ -379,14 +379,14 @@ def page():
     # TRANSPOSEE DATA
     st.markdown("##### 🛸 Transpose Data")
     st.caption("Cross-vendor price mapping to simplify analysis and highlight pricing differences.")
-
+    
     df = raw_transpose.copy()
     all_rounds_list = []
 
     # Ambil nama kolom
     round_col = df.columns[0]
     vendor_col = df.columns[1]
-    scope_cols = df.columns[2:-1]
+    scope_cols = list(df.columns[2:-1])
     price_col = df.columns[-1]
 
     for round_name, df_round in df.groupby(round_col):
@@ -396,18 +396,25 @@ def page():
         df_temp[vendor_col] = df_temp[vendor_col].astype(str).str.strip().str.upper()
 
         # Simpan urutan
-        unique_order = df_temp[list(scope_cols)].drop_duplicates().reset_index(drop=True)
+        # unique_order = df_temp[list(scope_cols)].drop_duplicates().reset_index(drop=True)
+        df_temp["__order"] = df_temp.groupby(scope_cols + [vendor_col]).cumcount()
+
+        # Simpan urutan asli (scope + __order) untuk menjaga ordering input
+        scope_order = df_temp[scope_cols + ["__order"]].drop_duplicates().reset_index(drop=True)
 
         # Pivot
-        pivot_df = df_temp.pivot_table(
-            index=list(scope_cols),
+        pivot_df = (df_temp.pivot_table(
+            index=scope_cols + ["__order"],
             columns=vendor_col,
             values=price_col,
-            aggfunc="sum"
-        ).reset_index()
+            aggfunc="first",    # ambil value apa adanya (bukan sum)
+            sort=False
+        ).reset_index())
 
         # Merge agar urutan sesuai
-        pivot_df = unique_order.merge(pivot_df, on=list(scope_cols), how="left")
+        # pivot_df = unique_order.merge(pivot_df, on=list(scope_cols), how="left")
+        pivot_df = scope_order.merge(pivot_df, on=scope_cols + ["__order"], how="left")
+        pivot_df = pivot_df.drop(columns="__order")
 
         # Tambahkan kolom ROUND
         pivot_df.insert(0, "ROUND", round_name.upper())
@@ -417,9 +424,13 @@ def page():
         total_row["ROUND"] = round_name.upper()
         total_row[scope_cols[0]] = "TOTAL"
 
-        for v in pivot_df.columns:
-            if v not in ["ROUND", *scope_cols]:
-                total_row[v] = pivot_df[v].sum()
+        # for v in pivot_df.columns:
+        #     if v not in ["ROUND", *scope_cols]:
+        #         total_row[v] = pivot_df[v].sum()
+
+        num_cols_round = pivot_df.select_dtypes(include=["number"]).columns
+        for c in num_cols_round:
+            total_row[c] = pivot_df[c].sum()
 
         pivot_df = pd.concat([pivot_df, pd.DataFrame([total_row])], ignore_index=True)
 
@@ -431,10 +442,17 @@ def page():
     # TOTAL BESARR
     total_all_row = {col: "" for col in df_summary.columns}
     total_all_row["ROUND"] = "TOTAL"
+    total_all_row[scope_cols[0]] = "TOTAL"
 
-    for v in df_summary.columns:
-        if v not in ["ROUND", *scope_cols]:
-            total_all_row[v] = df_summary[df_summary[scope_cols[0]] == "TOTAL"][v].sum()
+    # for v in df_summary.columns:
+    #     if v not in ["ROUND", *scope_cols]:
+    #         total_all_row[v] = df_summary[df_summary[scope_cols[0]] == "TOTAL"][v].sum()
+
+    num_cols_all = df_summary.select_dtypes(include="number").columns
+    total_mask = df_summary[df_summary[scope_cols[0]] == "TOTAL"]
+
+    for c in num_cols_all:
+        total_all_row[c] = total_mask[c].sum()
 
     df_summary = pd.concat([df_summary, pd.DataFrame([total_all_row])], ignore_index=True)
 
@@ -607,6 +625,7 @@ def page():
     st.divider()
 
     # PRICE MOVEMENTT ANALYSISS
+    # PRICE MOVEMENT ANALYSIS
     st.markdown("##### 💸 Price Movement Analysis")
 
     round_col  = raw_transpose.columns[0]
@@ -616,45 +635,52 @@ def page():
 
     df = raw_transpose.copy()
 
-    # Standardisasi vendor
+    # ============================
+    # 1. Standardisasi vendor
+    # ============================
     df[vendor_col] = df[vendor_col].astype(str).str.strip().str.upper()
 
-    # Simpan urutan Scope
-    df["SCOPE_KEY"] = df[scope_cols].astype(str).agg("|".join, axis=1)
-    scope_order_map = (
-        df.drop_duplicates([vendor_col, "SCOPE_KEY"])
-        .groupby(vendor_col)["SCOPE_KEY"]
-        .apply(list)
-        .to_dict()
-    )
-
-    # Pivot
+    # ============================
+    # 2. Buat SCOPE KEY + ORDER
+    # ============================
     df["SCOPE_KEY"] = df[scope_cols].astype(str).agg("|".join, axis=1)
 
+    # Untuk handle duplicate scope
+    df["__ORDER"] = df.groupby([vendor_col, "SCOPE_KEY"]).cumcount()
+
+    # Gabungkan jadi index final → mencegah PIVOT menumpuk ke bawah
+    df["INDEX_KEY"] = df["SCOPE_KEY"] + "|" + df["__ORDER"].astype(str)
+
+    # ============================
+    # 3. Pivot horizontal (fixed)
+    # ============================
     df_pivot = df.pivot_table(
-        index=[vendor_col, "SCOPE_KEY"],
+        index=[vendor_col, "INDEX_KEY"],
         columns=round_col,
         values=price_col,
         aggfunc="mean"
     ).reset_index()
 
-    # Pisahkan kembali SCOPE_KEY ke kolom dinamis
+    # ============================
+    # 4. Pecah kembali INDEX_KEY
+    # ============================
+    df_pivot[["SCOPE_KEY", "__ORDER"]] = df_pivot["INDEX_KEY"].str.split("|", n=1, expand=True)
+    df_pivot["__ORDER"] = df_pivot["__ORDER"].astype(int)
+
+    # Pecah SCOPE_KEY menjadi SCOPE COLS
     df_pivot[scope_cols] = df_pivot["SCOPE_KEY"].str.split("|", expand=True)
 
-    # Urutkan round sesuai data
+    # ============================
+    # 5. Reorder columns agar rapi
+    # ============================
     round_order = list(df[round_col].unique())
-    df_pivot = df_pivot[[vendor_col, "SCOPE_KEY", *scope_cols, *round_order]]
 
-    # Sorting sesuai urutan asli
-    df_pivot["SCOPE_ORDER"] = df_pivot.apply(
-        lambda row: scope_order_map[row[vendor_col]].index(row["SCOPE_KEY"])
-        if row["SCOPE_KEY"] in scope_order_map[row[vendor_col]] else 9999,
-        axis=1
-    )
+    df_pivot = df_pivot[[vendor_col, "__ORDER", *scope_cols, *round_order]]
+    df_pivot = df_pivot.sort_values([vendor_col, "__ORDER"]).reset_index(drop=True)
 
-    df_pivot = df_pivot.sort_values([vendor_col, "SCOPE_ORDER"]).drop(columns=["SCOPE_ORDER"])
-
-    # PRICE REDUCTION
+    # ============================
+    # 6. PRICE REDUCTION
+    # ============================
     def compute_price_reduction(row):
         prices = row[round_order]
         valid_prices = prices.dropna()
@@ -675,12 +701,14 @@ def page():
             "PRICE REDUCTION (VALUE)": reduction_value,
             "PRICE REDUCTION (%)": round(reduction_pct, 2)
         }) 
-    
+
     df_pivot[["PRICE REDUCTION (VALUE)", "PRICE REDUCTION (%)"]] = (
         df_pivot.apply(compute_price_reduction, axis=1)
     )
 
-    # PRICE TREND
+    # ============================
+    # 7. PRICE TREND
+    # ============================
     def detect_trend(row):
         prices = row[round_order].values.astype(float)
         prices = prices[~np.isnan(prices)]
@@ -693,24 +721,133 @@ def page():
             return "Consistently Up"
         if len(set(prices)) == 1:
             return "No Change"
-        
         return "Fluctuating"
-    
+
     df_pivot["PRICE TREND"] = df_pivot.apply(detect_trend, axis=1)
 
-    # PRICE STABILITY INDEX (PSI)
+    # ============================
+    # 8. PRICE STABILITY INDEX (PSI)
+    # ============================
     def compute_psi(row):
         prices = row[round_order].astype(float)
         prices = prices[~np.isnan(prices)]
         if len(prices) == 0:
             return np.nan
         return ((prices.max() - prices.min()) / prices.mean()) * 100
-    
+
     df_pivot["STANDARD DEVIATION"] = df_pivot[round_order].std(axis=1, ddof=0).round(4)
     df_pivot["PRICE STABILITY INDEX (%)"] = df_pivot.apply(compute_psi, axis=1).round(2)
 
-    # Hapus helper column
+    # ============================
+    # 9. Hapus kolom helper
+    # ============================
     df_pivot = df_pivot.drop(columns=["SCOPE_KEY"])
+
+
+    # st.markdown("##### 💸 Price Movement Analysis")
+
+    # round_col  = raw_transpose.columns[0]
+    # vendor_col = raw_transpose.columns[1]
+    # scope_cols = raw_transpose.columns[2:-1]
+    # price_col  = raw_transpose.columns[-1]
+
+    # df = raw_transpose.copy()
+
+    # # Standardisasi vendor
+    # df[vendor_col] = df[vendor_col].astype(str).str.strip().str.upper()
+
+    # # Simpan urutan Scope
+    # df["SCOPE_KEY"] = df[scope_cols].astype(str).agg("|".join, axis=1)
+    # scope_order_map = (
+    #     df.drop_duplicates([vendor_col, "SCOPE_KEY"])
+    #     .groupby(vendor_col)["SCOPE_KEY"]
+    #     .apply(list)
+    #     .to_dict()
+    # )
+
+    # # Pivot
+    # df["SCOPE_KEY"] = df[scope_cols].astype(str).agg("|".join, axis=1)
+
+    # df_pivot = df.pivot_table(
+    #     index=[vendor_col, "SCOPE_KEY"],
+    #     columns=round_col,
+    #     values=price_col,
+    #     aggfunc="mean"
+    # ).reset_index()
+
+    # # Pisahkan kembali SCOPE_KEY ke kolom dinamis
+    # df_pivot[scope_cols] = df_pivot["SCOPE_KEY"].str.split("|", expand=True)
+
+    # # Urutkan round sesuai data
+    # round_order = list(df[round_col].unique())
+    # df_pivot = df_pivot[[vendor_col, "SCOPE_KEY", *scope_cols, *round_order]]
+
+    # # Sorting sesuai urutan asli
+    # df_pivot["SCOPE_ORDER"] = df_pivot.apply(
+    #     lambda row: scope_order_map[row[vendor_col]].index(row["SCOPE_KEY"])
+    #     if row["SCOPE_KEY"] in scope_order_map[row[vendor_col]] else 9999,
+    #     axis=1
+    # )
+
+    # df_pivot = df_pivot.sort_values([vendor_col, "SCOPE_ORDER"]).drop(columns=["SCOPE_ORDER"])
+
+    # # PRICE REDUCTION
+    # def compute_price_reduction(row):
+    #     prices = row[round_order]
+    #     valid_prices = prices.dropna()
+
+    #     if len(valid_prices) < 2:
+    #         return pd.Series({
+    #             "PRICE REDUCTION (VALUE)": np.nan, 
+    #             "PRICE REDUCTION (%)": np.nan
+    #         })
+
+    #     first_val = valid_prices.iloc[0]
+    #     last_val  = valid_prices.iloc[-1]
+
+    #     reduction_value = last_val - first_val
+    #     reduction_pct   = (reduction_value / first_val) * 100
+
+    #     return pd.Series({
+    #         "PRICE REDUCTION (VALUE)": reduction_value,
+    #         "PRICE REDUCTION (%)": round(reduction_pct, 2)
+    #     }) 
+    
+    # df_pivot[["PRICE REDUCTION (VALUE)", "PRICE REDUCTION (%)"]] = (
+    #     df_pivot.apply(compute_price_reduction, axis=1)
+    # )
+
+    # # PRICE TREND
+    # def detect_trend(row):
+    #     prices = row[round_order].values.astype(float)
+    #     prices = prices[~np.isnan(prices)]
+
+    #     if len(prices) <= 1:
+    #         return "Insufficient Data"
+    #     if all(prices[i] > prices[i+1] for i in range(len(prices)-1)):
+    #         return "Consistently Down"
+    #     if all(prices[i] < prices[i+1] for i in range(len(prices)-1)):
+    #         return "Consistently Up"
+    #     if len(set(prices)) == 1:
+    #         return "No Change"
+        
+    #     return "Fluctuating"
+    
+    # df_pivot["PRICE TREND"] = df_pivot.apply(detect_trend, axis=1)
+
+    # # PRICE STABILITY INDEX (PSI)
+    # def compute_psi(row):
+    #     prices = row[round_order].astype(float)
+    #     prices = prices[~np.isnan(prices)]
+    #     if len(prices) == 0:
+    #         return np.nan
+    #     return ((prices.max() - prices.min()) / prices.mean()) * 100
+    
+    # df_pivot["STANDARD DEVIATION"] = df_pivot[round_order].std(axis=1, ddof=0).round(4)
+    # df_pivot["PRICE STABILITY INDEX (%)"] = df_pivot.apply(compute_psi, axis=1).round(2)
+
+    # # Hapus helper column
+    # df_pivot = df_pivot.drop(columns=["SCOPE_KEY"])
 
     # Tambahkan slicer 
     all_vendor = sorted(df_pivot[vendor_col].dropna().unique())
@@ -886,3 +1023,78 @@ def page():
     # st.dataframe(win_table, hide_index=True)
     tab1.altair_chart(chart)
     tab1.dataframe(win_table, hide_index=True)
+
+
+    # # Price Movement
+    # st.write(" ")
+    # st.markdown("##### 🌍 Trend of Price Movement per Scope")
+ 
+    # col_vendor = df.columns[0]
+    # col_round  = df.columns[1]
+    # col_scope  = df.columns[2]
+    # col_price  = df.columns[3]
+ 
+    # # --- Normalisasi nama vendor biar konsisten ---
+    # df[col_vendor] = (
+    #     df[col_vendor]
+    #     .astype(str)
+    #     .str.strip()      # Hilangkan spasi depan/belakang
+    #     .str.upper()      # Ubah ke huruf besar semua
+    # )
+ 
+    # # --- Tab per vendor
+    # vendors = df[col_vendor].unique()
+    # tabs = st.tabs([f"{v}" for v in vendors])
+ 
+    # # Inisialisasi list untuk simpan hasil semua vendor
+    # df_all_vendors = []
+ 
+    # for i, v in enumerate(vendors):
+    #     with tabs[i]:
+    #         # Filter data vendor
+    #         df_vendor = df[df[col_vendor] == v].copy().reset_index(drop=True)
+ 
+    #         # Tambahkan kolom order untuk handle duplicate Scope
+    #         df_vendor["__order"] = df_vendor.groupby([col_scope, col_round]).cumcount()
+ 
+    #         # Pivot: scope sebagai index, round sebagai kolom, value = UPL
+    #         df_pivot = (
+    #             df_vendor
+    #             .pivot_table(
+    #                 index=[col_scope, "__order"],
+    #                 columns=col_round,
+    #                 values=col_price,
+    #                 aggfunc="first",
+    #                 sort=False
+    #             )
+    #             .fillna(0)
+    #             .reset_index()
+    #         )
+ 
+           
+    #         # Terapkan pembulatan
+    #         num_cols = [c for c in df_pivot.columns if c not in [col_scope, "__order"]]
+    #         for c in num_cols:
+    #             df_pivot[c] = df_pivot[c].apply(lambda x: round_half_up(x) if pd.notna(x) else x)
+ 
+    #         # Tambahkan kolom chart (list dari tiap baris)
+    #         # df_pivot["Price Trend"] = df_pivot[[c for c in num_cols if c != "__order"]].values.tolist()
+    #         df_pivot["Price Trend"] = (
+    #             df_pivot[[c for c in num_cols if c != "__order"]]
+    #             .apply(lambda x: str(list(x)), axis=1)
+    #         )
+ 
+    #         # Ambil hanya kolom numerik (rounds) untuk hitung min/max
+    #         numeric_cols = df_pivot.select_dtypes(include="number").columns
+    #         if len(numeric_cols) > 0:
+    #             y_min = int(df_pivot[numeric_cols].min().min())
+    #             y_max = int(df_pivot[numeric_cols].max().max())
+    #         else:
+    #             y_min, y_max = 0, 0
+ 
+    #         # Hapus kolom pembantu dan urutkan ulang
+    #         df_pivot = df_pivot.sort_values(["__order", col_scope]).drop(columns="__order").reset_index(drop=True)
+ 
+    #         # Urutkan scope sesuai kemunculan awal
+    #         scope_order = df_vendor[col_scope].drop_duplicates()
+    #         df_pivot = df_pivot.set_index(col_scope).loc[scope_order].reset_index()
