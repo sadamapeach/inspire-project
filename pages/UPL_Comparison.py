@@ -452,7 +452,7 @@ def page():
             options=all_1st,
             default=None,
             placeholder="Choose one or more vendors",
-            key=f"filter_1st_vendor"
+            key="filter_1st_vendor"
         )
     with col_sel_2:
         selected_2nd = st.multiselect(
@@ -460,7 +460,7 @@ def page():
             options=all_2nd,
             default=None,
             placeholder="Choose one or more vendors",
-            key=f"filter_2nd_vendor"
+            key="filter_2nd_vendor"
         )
 
     # --- Terapkan filter dengan logika AND
