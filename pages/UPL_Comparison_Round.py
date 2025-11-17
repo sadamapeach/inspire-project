@@ -274,7 +274,6 @@ def page():
         upload_files = st.session_state["upload_multi_file_upl_round_by_round"]
 
     else:
-        st.info("Please upload files to continue.")
         st.stop() 
     
     all_rounds = []
@@ -465,8 +464,6 @@ def page():
             icon=":material/download:",
         )
 
-    st.divider()
-
     # BIDD & PRICEE ANALYSIS
     st.markdown("##### 🧠 Bid & Price Analysis")
     
@@ -524,7 +521,88 @@ def page():
     for tab, round_name in zip(tabs, analysis_results.keys()):
         with tab:
             df_analysis = analysis_results[round_name]
-            st.dataframe(df_analysis, hide_index=True)
+
+            # --- 🎯 Tambahkan dua slicer terpisah untuk 1st Vendor dan 2nd Vendor
+            all_1st = sorted(df_analysis["1st Vendor"].dropna().unique())
+            all_2nd = sorted(df_analysis["2nd Vendor"].dropna().unique())
+
+            col_sel_1, col_sel_2 = st.columns(2)
+            with col_sel_1:
+                selected_1st = st.multiselect(
+                    "Filter: 1st vendor",
+                    options=all_1st,
+                    default=None,
+                    placeholder="Choose one or more vendors",
+                    key=f"filter_1st_vendor_{round_name}"
+                )
+            with col_sel_2:
+                selected_2nd = st.multiselect(
+                    "Filter: 2nd vendor",
+                    options=all_2nd,
+                    default=None,
+                    placeholder="Choose one or more vendors",
+                    key=f"filter_2nd_vendor_{round_name}"
+                )
+
+            # --- Terapkan filter dengan logika AND
+            if selected_1st and selected_2nd:
+                df_filtered = df_analysis[
+                    df_analysis["1st Vendor"].isin(selected_1st) &
+                    df_analysis["2nd Vendor"].isin(selected_2nd)
+                ]
+            elif selected_1st:
+                df_filtered = df_analysis[df_analysis["1st Vendor"].isin(selected_1st)]
+            elif selected_2nd:
+                df_filtered = df_analysis[df_analysis["2nd Vendor"].isin(selected_2nd)]
+            else:
+                df_filtered = df_analysis.copy()
+
+            # Format
+            num_cols = df_filtered.select_dtypes(include=["number"]).columns
+            format_dict = {col: format_rupiah for col in num_cols}
+            format_dict.update({"Gap 1 to 2 (%)": "{:.1f}%"})
+            for vendor in vendor_cols:
+                format_dict[f"{vendor} to Median (%)"] = "{:+.1f}%"
+
+            df_filtered_style = (
+                df_filtered.style
+                .format(format_dict)
+                .apply(lambda row: highlight_1st_2nd_vendor(row, df_filtered.columns), axis=1)
+            )
+
+            st.caption(f"✨ Total number of data entries: **{len(df_filtered)}**")
+            st.dataframe(df_filtered_style, hide_index=True)
+
+            # Download button to Excel
+            excel_data = get_excel_download_highlight_1st_2nd_lowest(df_filtered)
+
+            # Layout tombol (rata kanan)
+            col1, col2, col3 = st.columns([2.3,2,1])
+            with col3:
+                st.download_button(
+                    label="Download",
+                    data=excel_data,
+                    file_name=f"Round Analysis - {round_name}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    icon=":material/download:",
+                    key=f"download_Round_{round_name}_Comparison"  # unik per tab
+                )
+
+    st.divider()
+
+    st.markdown("##### 🌍 Bid & Price Summary")
+
+    summary_list = []
+
+    for round_name, df_analysis in analysis_results.items():
+        df_temp = df_analysis.copy()
+        df_temp.insert(0, "ROUND", round_name)
+        summary_list.append(df_temp)
+
+    df_analysis_summary = pd.concat(summary_list, ignore_index=True)
+
+    # Simpan ke session state
+    st.session_state["bid_and_price_"]
 
 
 #     # st.subheader("🧮 Round: Lowest Price & Gap (%)")

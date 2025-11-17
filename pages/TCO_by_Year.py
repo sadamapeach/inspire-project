@@ -513,7 +513,7 @@ def page():
 
     # BID & PRICE ANALYSIS
     st.markdown("##### 🧠 Bid & Price Analysis")
-    st.caption("Comparative analysis across vendors including lowest price, gap percentage, and deviation from median.")
+    # st.caption("Comparative analysis across vendors including lowest price, gap percentage, and deviation from median.")
 
     df_analysis = merged_total.copy()
 
@@ -613,6 +613,7 @@ def page():
         .apply(lambda row: highlight_1st_2nd_vendor(row, df_analysis_final.columns), axis=1)
     )
 
+    st.caption(f"✨ Total number of data entries: **{len(df_filtered)}**")
     st.dataframe(df_analysis_styled, hide_index=True)
 
     # Download button to Excel
