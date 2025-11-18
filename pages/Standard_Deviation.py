@@ -253,61 +253,35 @@ def page():
     st.session_state['result_standard_deviation'] = df_clean
     st.divider()
 
+    # RANKKK
+    st.markdown("##### 🥇 Bidder's Rank")
+    st.caption("The bidder ranking process has been successfully completed.")
 
-    # # Rank
-    # st.subheader("🥇 Bidder's Rank")
-    # st.caption("Awesome! All bidders have been successfully ranked 🎉")
+    vendor_cols = df_clean.columns[1:]          # numeric column vendor (dynamic)
+    df_rank = df_clean[[df_clean.columns[0]]].copy()  # ambil kolom pertama (scope)
+    df_rank[vendor_cols] = (
+        df_clean[vendor_cols]
+        .rank(axis=1, method="min", ascending=True)
+        .astype('Int64')
+    )
 
-    # # Logic
-    # vendor_cols = df.columns[1:]    # kolom vendor
-    
-    # df_rank = df[[df.columns[0]]].copy()    # ambil kolom pertama (WP)
-    # df_rank[vendor_cols] = (
-    #     df[vendor_cols]
-    #     .rank(axis=1, method='min', ascending=True)
-    #     .astype('Int64')
-    # )
+    st.dataframe(df_rank, hide_index=True)
 
-    # # Tampilan 'No-Bid'
-    # df_rank_display = df_rank.copy()
+    # Download
+    excel_data = get_excel_download(df_rank)
 
-    # # Konversi angka float ke integer string (agar tidak tampil .0)
-    # df_rank_display = df_rank_display.apply(
-    #     lambda col: col.map(
-    #         lambda x: f"{int(x)}" if isinstance(x, (int, float)) and pd.notna(x) and float(x).is_integer() else x
-    #     )
-    # )
+    # Layout tombol (rata kanan)
+    col1, col2, col3 = st.columns([2.3,2,1])
+    with col3:
+        st.download_button(
+            label="Download",
+            data=excel_data,
+            file_name="Bidder_Rank.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            icon=":material/download:",
+        )
 
-    # # Ubah NaN jadi 'No-Bid'
-    # df_rank_display = df_rank_display.fillna("No-Bid").astype("object")
-
-    # # Tampilkan di Streamlit
-    # st.dataframe(
-    #     df_rank_display.style.map(highlight_no_bid),
-    #     hide_index=True
-    # )
-
-    # # Download button to Excel
-    # @st.cache_data
-    # def get_excel_download(df_rank_display, sheet_name="Bidder Rank"):
-    #     output = BytesIO()
-    #     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-    #         df_rank_display.to_excel(writer, index=False, sheet_name=sheet_name)
-    #     return output.getvalue()
-
-    # # Simpan hasil ke variabel
-    # excel_data = get_excel_download(df_rank_display)
-
-    # # Layout tombol (rata kanan)
-    # col1, col2, col3 = st.columns([3,1,1])
-    # with col3:
-    #     st.download_button(
-    #         label="Download",
-    #         data=excel_data,
-    #         file_name="Bidder_Rank.xlsx",
-    #         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    #         icon=":material/download:",
-    #     )
+    st.divider()
 
     # # RANK VISUALIZATION
     # st.subheader(f"📊 Rank Visualization")
