@@ -958,7 +958,7 @@ def page():
                 )
 
     # PRICEE TRENDD
-    trend_order = ["No Change", "Consistently Down", "Consistently Up", "Fluctuating"]
+    trend_order = ["No Change", "Consistently Down", "Consistently Up", "Fluctuating", "Insufficient Data"]
 
     # Ringkas jumlah kemunculan per vendor per trend
     trend_summary = (
@@ -1002,6 +1002,14 @@ def page():
         format="d"   # angka bulat, bukan 1k/1m
     )
 
+    trend_summary["VendorIndex"] = trend_summary[vendor_col].map(
+        {v: i for i, v in enumerate(vendor_order)}
+    )
+    trend_summary["TotalVendors"] = trend_summary.groupby("PRICE TREND")[vendor_col].transform("nunique")
+
+    # posisi label = vendor index + 0.5 (tengah bar)
+    trend_summary["LabelOffset"] = trend_summary["VendorIndex"] + 0.5
+
     # Chart
     bars = (
         alt.Chart(trend_summary)
@@ -1032,10 +1040,9 @@ def page():
         alt.Chart(trend_summary)
             .mark_text(
                 dy=-7,                # geser sedikit ke atas
-                dx=7,
                 fontSize=10,
                 fontWeight="bold",
-                color="gray"
+                color="gray",
             )
             .encode(
                 x=alt.X(
@@ -1043,7 +1050,7 @@ def page():
                     sort=trend_order
                 ),
                 y=alt.Y("Count:Q"),
-                text=alt.Text("Count:Q"),
+                text="Count:Q",
                 xOffset=f"{vendor_col}:N"   # penting: supaya posisinya sama dengan bar!
             )
     )
@@ -1116,4 +1123,3 @@ def page():
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     icon=":material/download:",
                 )
-
