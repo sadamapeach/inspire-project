@@ -63,7 +63,7 @@ def highlight_1st_2nd_vendor(row, columns):
     
 # Download button to Excel
 @st.cache_data
-def get_excel_download(df, sheet_name="Your_file_name"):
+def get_excel_download(df, sheet_name="Sheet1"):
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name=sheet_name)
@@ -122,7 +122,7 @@ def get_excel_download_highlight_total(df, sheet_name="Sheet1"):
     return output.getvalue()
 
 # Download Highlight 1st & 2nd Vendors
-def get_excel_download_highlight_1st_2nd_lowest(df, sheet_name="Your_file_name"):
+def get_excel_download_highlight_1st_2nd_lowest(df, sheet_name="Sheet1"):
     output = BytesIO()
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
         df.to_excel(writer, index=False, sheet_name=sheet_name)
@@ -290,7 +290,7 @@ def page():
 
     # RANK-1 DEVIATIONNN
     st.markdown("##### 🛸 Rank-1 Deviation (%)")
-    st.caption("This table displays the percentage deviation of all vendors relative to the Rank-1 (lowest) vendor for each item.")
+    st.caption("This table shows each vendor’s price deviation (%) from the lowest-priced (Rank-1) vendor per item.")
 
     min_value = df_clean[vendor_cols].min(axis=1, skipna=True)
     # Cari vendor dengan nilai minimum
@@ -328,7 +328,7 @@ def page():
         st.download_button(
             label="Download",
             data=excel_data,
-            file_name="Rank-1 Deviation.xlsx",
+            file_name="Rank-1 Deviation (%).xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             icon=":material/download:",
         )
@@ -336,6 +336,70 @@ def page():
     st.divider()
 
     # SUMMARYY DEVIATIONN
+    st.markdown("##### 🌍 Summary Deviation (%)")
+    st.caption("This table summarizes vendor rankings and their deviation (%) from the Rank-1 vendor for each item.")
+
+    scope_col = df_clean.columns[0]
+    vendor_cols = df_clean.columns[1:]
+
+    # Ubah ke long format
+    df_long = df_clean.melt(id_vars=[scope_col], var_name="Vendor", value_name="Price").dropna(subset=["Price"])
+    df_long["Rank"] = (
+        df_long.groupby(scope_col)["Price"]
+        .rank(method="min", ascending=True)
+    )
+
+    summary_rows = []
+    for comp, group in df_long.groupby(scope_col):
+        group = group.sort_values("Rank").reset_index(drop=True)
+        base_price = group.loc[0, "Price"]
+        row_data = {
+            df_clean.columns[0]: comp,
+            "1st Rank": group.loc[0, "Vendor"],
+            "Best Price": base_price
+        }
+
+        # Tambahkan 2nd, 3rd, dst secara horizontal
+        for i in range(1, len(group)):
+            rank = i+1
+            vendor = group.loc[i, "Vendor"]
+            price = group.loc[i, "Price"]
+            deviation = ((price - base_price) / base_price) * 100
+            row_data[f"{rank}th Rank"] = vendor
+            row_data[f"Dev. {rank}th to 1st (%)"] = deviation
+        summary_rows.append(row_data)
+
+    df_summary = pd.DataFrame(summary_rows)
+
+    # Format
+    format_dict = {}
+
+    # Kolom "Best Price"
+    if "Best Price" in df_summary.columns:
+        format_dict["Best Price"] = format_rupiah
+    
+    # Kolom deviasi (%)
+    for col in df_summary.columns:
+        if col.startswith("Dev. ") and col.endswith("(%)"):
+            format_dict[col] = format_rupiah_percent
+    
+    df_summary_styled = df_summary.style.format(format_dict)
+
+    st.dataframe(df_summary_styled, hide_index=True)
+
+    # Download
+    excel_data = get_excel_download(df_summary)
+
+    # Layout tombol (rata kanan)
+    col1, col2, col3 = st.columns([2.3,2,1])
+    with col3:
+        st.download_button(
+            label="Download",
+            data=excel_data,
+            file_name="Summary Deviation (%).xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            icon=":material/download:",
+        )
 
     # # RANK VISUALIZATION
     # st.subheader(f"📊 Rank Visualization")
@@ -441,161 +505,3 @@ def page():
     #     tab.altair_chart(chart)
 
     # # st.divider()
-
-    # # STANDARD DEVIATION
-    # st.subheader("📈 Standard Deviation")
-    # # st.caption("blbalanbsmlaslka")
-    # tab1, tab2 = st.tabs(["🏅 Rank-1 Deviation (%)", "🌐 Summary Deviation (%)"])
-
-    # # Rank-1 Deviation
-    # min_value = df[vendor_cols].min(axis=1, skipna=True)
-
-    # # Cari vendor dengan nilai minimum
-    # best_vendor = df[vendor_cols].idxmin(axis=1, skipna=True)
-
-    # # Simpan hasil ke dataframe baru
-    # df_min_vendor = pd.DataFrame({
-    #     df.columns[0]: df[df.columns[0]],
-    #     "best_vendor": best_vendor,
-    #     "best_price": min_value
-    # })
-
-    # # Buat dataframe deviasi dalam persentase
-    # df_dev = df[[df.columns[0]]].copy()
-    # for col in vendor_cols:
-    #     df_dev[col] = ((df[col] - min_value) / min_value) * 100
-
-    # # Abaikan vendor yang tidak ikut
-    # df_dev[vendor_cols] = df_dev[vendor_cols].where(~df[vendor_cols].isna(), np.nan)
-
-    # # --- Highlight pakai referensi df_min_vendor ---
-    # def highlight_cells(row):
-    #     comp_name = row[df.columns[0]]
-    #     best_v = df_min_vendor.loc[
-    #         df_min_vendor[df.columns[0]] == comp_name, "best_vendor"
-    #     ].values[0]
-
-    #     styles = {}
-    #     for col in vendor_cols:
-    #         val = row[col]
-    #         if val == "No-Bid":
-    #             styles[col] = "background-color: #f8c8dc; color: #7a1f47; font-weight: bold;"
-    #         elif col == best_v:
-    #             styles[col] = "background-color: #d7c6f3; color: #402e72; font-weight: bold;"
-    #         else:
-    #             styles[col] = ""
-    #     return pd.Series(styles)
-
-    # # --- Format tampilan ---
-    # df_dev_display = df_dev.copy()
-
-    # # Ubah NaN jadi 'No-Bid'
-    # df_dev_display = df_dev_display.fillna("No-Bid").astype("object")
-
-    # for col in vendor_cols:
-    #     df_dev_display[col] = df_dev_display[col].apply(
-    #         lambda x: f"{x:.2f}%" if isinstance(x, (int, float)) else x
-    #     )
-
-    # # Terapkan highlight berdasarkan df_min_vendor
-    # styled_df = df_dev_display.style.apply(highlight_cells, axis=1)
-
-    # # Dataframe
-    # tab1.dataframe(styled_df, hide_index=True)
-
-    # # Download button to Excel
-    # @st.cache_data
-    # def get_excel_download2(df_dev_display, sheet_name="Rank-1 Deviation"):
-    #     output = BytesIO()
-    #     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-    #         df_dev_display.to_excel(writer, index=False, sheet_name=sheet_name)
-    #     return output.getvalue()
-
-    # # Simpan hasil ke variabel
-    # excel_data2 = get_excel_download2(df_dev_display)
-    # tab1.download_button(
-    #     label="Download",
-    #     data=excel_data2,
-    #     file_name="Rank1_Deviation.xlsx",
-    #     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    #     icon=":material/download:",
-    # )
-
-    # # Overall Deviation (%)
-    # col0 = df.columns[0]
-    # vendor_cols = df.columns[1:]
-
-    # # Ubah ke long format
-    # df_long = df.melt(id_vars=[col0], var_name="Vendor", value_name="Price").dropna(subset=["Price"])
-
-    # # Rank per komponen
-    # df_long["Rank"] = df_long.groupby(col0)["Price"].rank(method="min", ascending=True)
-
-    # # Fungsi buat hasil per komponen
-    # summary_rows = []
-
-    # for comp, group in df_long.groupby(col0):
-    #     group = group.sort_values("Rank").reset_index(drop=True)
-    #     base_price = group.loc[0, "Price"]
-    #     row_data = {
-    #         df.columns[0]: comp,
-    #         "1st Rank": group.loc[0, "Vendor"],
-    #         "Best Price": base_price
-    #     }
-    #     # Tambahkan 2nd, 3rd, dst secara horizontal
-    #     for i in range(1, len(group)):
-    #         rank = i + 1
-    #         vendor = group.loc[i, "Vendor"]
-    #         price = group.loc[i, "Price"]
-    #         deviation = ((price - base_price) / base_price) * 100
-    #         row_data[f"{rank}th Rank"] = vendor
-    #         row_data[f"Dev. {rank}th vs 1st (%)"] = deviation
-    #     summary_rows.append(row_data)
-
-    # # Gabung jadi dataframe
-    # df_overall = pd.DataFrame(summary_rows)
-
-    # # Format deviasi
-    # for col in df_overall.columns:
-    #     if "Dev." in col:
-    #         df_overall[col] = df_overall[col].apply(lambda x: f"{x:.2f}%" if pd.notna(x) else "")
-
-    # # Ganti NaN dengan string kosong
-    # df_overall = df_overall.fillna("")
-
-    # # Konversi angka float ke integer string (agar tidak tampil .0)
-    # df_overall = df_overall.apply(
-    #     lambda col: col.map(
-    #         lambda x: f"{int(x)}" if isinstance(x, (int, float)) and pd.notna(x) and float(x).is_integer() else x
-    #     )
-    # )
-
-    # # --- Fungsi highlight pink untuk cell kosong ---
-    # def highlight_empty(val):
-    #     if val == "" or pd.isna(val):
-    #         return "background-color: #f8c8dc; color: #7a1f47;"
-    #     return ""
-
-    # # --- Tampilkan tabel di Streamlit ---
-    # tab2.dataframe(
-    #     df_overall.style.map(highlight_empty),
-    #     hide_index=True
-    # )
-
-    # # Download button to Excel
-    # @st.cache_data
-    # def get_excel_download3(df_overall, sheet_name="Overall Deviation"):
-    #     output = BytesIO()
-    #     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-    #         df_overall.to_excel(writer, index=False, sheet_name=sheet_name)
-    #     return output.getvalue()
-
-    # # Simpan hasil ke variabel
-    # excel_data2 = get_excel_download3(df_overall)
-    # tab2.download_button(
-    #     label="Download",
-    #     data=excel_data2,
-    #     file_name="Overall_Deviation.xlsx",
-    #     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    #     icon=":material/download:",
-    # )
