@@ -28,6 +28,11 @@ def format_rupiah(x):
             formatted = formatted[:-3]
     return formatted
 
+def format_rupiah_percent(x):
+    if pd.isna(x):
+        return ""                   # hilangkan None / NaN
+    return f"{format_rupiah(x)}%"   # pakai format_rupiah + %
+
 def highlight_total_row(row):
     # Cek apakah ada kolom yang berisi "TOTAL" (case-insensitive)
     if any(str(x).strip().upper() == "TOTAL" for x in row):
@@ -282,6 +287,55 @@ def page():
         )
 
     st.divider()
+
+    # RANK-1 DEVIATIONNN
+    st.markdown("##### 🛸 Rank-1 Deviation (%)")
+    st.caption("This table displays the percentage deviation of all vendors relative to the Rank-1 (lowest) vendor for each item.")
+
+    min_value = df_clean[vendor_cols].min(axis=1, skipna=True)
+    # Cari vendor dengan nilai minimum
+    best_vendor = df_clean[vendor_cols].idxmin(axis=1, skipna=True)
+    
+    # # Simpan hasil ke dataframe baru
+    # df_min_vendor = pd.DataFrame({
+    #     df_clean.columns[0]: df_clean[df_clean[0]],
+    #     "best_vendor": best_vendor,
+    #     "best_price": min_value 
+    # })
+
+    # Buat dataframe deviasi dalam persentase
+    df_dev = df_clean[[df_clean.columns[0]]].copy()
+    for col in vendor_cols:
+        df_dev[col] = ((df_clean[col] - min_value) / min_value) * 100
+
+    # Abaikan vendor yang tidak ikut (No-Bid)
+    df_dev[vendor_cols] = df_dev[vendor_cols].where(~df_clean[vendor_cols].isna(), np.nan)
+
+    # Format
+    num_cols = df_dev.select_dtypes(include=["number"]).columns
+    format_dict = {col: format_rupiah_percent for col in num_cols}
+
+    df_dev_styled = df_dev.style.format(format_dict)
+
+    st.dataframe(df_dev_styled, hide_index=True)
+
+    # Download
+    excel_data = get_excel_download(df_dev)
+
+    # Layout tombol (rata kanan)
+    col1, col2, col3 = st.columns([2.3,2,1])
+    with col3:
+        st.download_button(
+            label="Download",
+            data=excel_data,
+            file_name="Rank-1 Deviation.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            icon=":material/download:",
+        )
+
+    st.divider()
+
+    # SUMMARYY DEVIATIONN
 
     # # RANK VISUALIZATION
     # st.subheader(f"📊 Rank Visualization")
