@@ -33,32 +33,22 @@ def format_rupiah_percent(x):
         return ""                   # hilangkan None / NaN
     return f"{format_rupiah(x)}%"   # pakai format_rupiah + %
 
-def highlight_total_row(row):
-    # Cek apakah ada kolom yang berisi "TOTAL" (case-insensitive)
-    if any(str(x).strip().upper() == "TOTAL" for x in row):
-        return ["font-weight: bold;"] * len(row)
-    else:
-        return [""] * len(row)
+def highlight_min_cell(row):
+    styles = []
     
-def highlight_total_row_v2(row):
-    # Cek apakah ada kolom yang berisi "TOTAL" (case-insensitive)
-    if any(str(x).strip().upper() == "TOTAL" for x in row):
-        return ["font-weight: bold; background-color: #D9EAD3; color: #1A5E20;"] * len(row)
+    # Cari nilai minimum, abaikan NaN
+    numeric_vals = row[row.apply(lambda x: isinstance(x, (int, float)))]
+    if not numeric_vals.empty:
+        min_val = numeric_vals.min()
     else:
-        return [""] * len(row)
-    
-def highlight_1st_2nd_vendor(row, columns):
-    styles = [""] * len(columns)
-    first_vendor = row.get("1st Vendor")
-    second_vendor = row.get("2nd Vendor")
+        min_val = None
 
-    for i, col in enumerate(columns):
-        if col == first_vendor:
-            # styles[i] = "background-color: #f8c8dc; color: #7a1f47;"
-            styles[i] = "background-color: #C6EFCE; color: #006100;"
-        elif col == second_vendor:
-            # styles[i] = "background-color: #d7c6f3; color: #402e72;"
-            styles[i] = "background-color: #FFEB9C; color: #9C6500;"
+    # Buat style per cell
+    for val in row:
+        if val == min_val:
+            styles.append("background-color: #C6EFCE; color: #006100;")
+        else:
+            styles.append("")
     return styles
     
 # Download button to Excel
@@ -93,7 +83,7 @@ def get_excel_download(df, sheet_name="Sheet1"):
 
 # Download highlight total
 @st.cache_data
-def get_excel_download_highlight_total(df, sheet_name="Sheet1"):
+def get_excel_download_highlight(df, sheet_name="Sheet1"):
     output = BytesIO()
 
     # Buat file Excel dengan XlsxWriter
@@ -102,57 +92,23 @@ def get_excel_download_highlight_total(df, sheet_name="Sheet1"):
         workbook = writer.book
         worksheet = writer.sheets[sheet_name]
 
-        # Tentukan format
+        # Format untuk highlight min value
         highlight_format = workbook.add_format({
             "bold": True,
-            "bg_color": "#D9EAD3",  # hijau lembut
-            "font_color": "#1A5E20"  # hijau tua
+            "bg_color": "#C6EFCE",  # hijau lembut
+            "font_color": "#006100"  # hijau tua
         })
-
-        # Jumlah kolom data
-        num_cols = len(df.columns)
 
         # Iterasi baris (mulai dari baris 1 karena header di baris 0)
         for row_num, row_data in enumerate(df.itertuples(index=False), start=1):
-            if any(str(x).strip().upper() == "TOTAL" for x in row_data if pd.notna(x)):
-                # Highlight hanya sel di kolom yang berisi data
-                for col_num in range(num_cols):
-                    worksheet.write(row_num, col_num, row_data[col_num], highlight_format)
-
-    return output.getvalue()
-
-# Download Highlight 1st & 2nd Vendors
-def get_excel_download_highlight_1st_2nd_lowest(df, sheet_name="Sheet1"):
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-        df.to_excel(writer, index=False, sheet_name=sheet_name)
-        workbook = writer.book
-        worksheet = writer.sheets[sheet_name]
-
-        # --- Format umum ---
-        format_first = workbook.add_format({'bg_color': '#C6EFCE'})  # hijau Excel-style
-        format_second = workbook.add_format({'bg_color': '#FFEB9C'}) # kuning Excel-style
-
-        # --- Loop baris dan kolom ---
-        for row_idx, (_, row) in enumerate(df.iterrows(), start=1):
-            first_vendor = row.get("1st Vendor")
-            second_vendor = row.get("2nd Vendor")
-
-            for col_idx, col in enumerate(df.columns):
-                value = row[col]
-                fmt = None
-
-                # Tentukan warna highlight
-                if col == first_vendor:
-                    fmt = format_first
-                elif col == second_vendor:
-                    fmt = format_second
-
-                # Handle semua jenis data NaN, inf, dan None
-                if pd.isna(value) or (isinstance(value, (int, float)) and np.isinf(value)):
-                    value = ""
-
-                worksheet.write(row_idx, col_idx, value, fmt)
+            # Ambil nilai numeric
+            numeric_vals = [(i, val) for i, val in enumerate(row_data) if isinstance(val, (int, float))]
+            if numeric_vals:
+                min_val = min(val for i, val in numeric_vals)
+                # Highlight cell yang sama dengan min_val
+                for col_num, val in numeric_vals:
+                    if val == min_val:
+                        worksheet.write(row_num, col_num, val, highlight_format)
 
     return output.getvalue()
 
@@ -296,13 +252,6 @@ def page():
     # Cari vendor dengan nilai minimum
     best_vendor = df_clean[vendor_cols].idxmin(axis=1, skipna=True)
     
-    # # Simpan hasil ke dataframe baru
-    # df_min_vendor = pd.DataFrame({
-    #     df_clean.columns[0]: df_clean[df_clean[0]],
-    #     "best_vendor": best_vendor,
-    #     "best_price": min_value 
-    # })
-
     # Buat dataframe deviasi dalam persentase
     df_dev = df_clean[[df_clean.columns[0]]].copy()
     for col in vendor_cols:
@@ -315,12 +264,16 @@ def page():
     num_cols = df_dev.select_dtypes(include=["number"]).columns
     format_dict = {col: format_rupiah_percent for col in num_cols}
 
-    df_dev_styled = df_dev.style.format(format_dict)
+    df_dev_styled = (
+        df_dev.style
+        .format(format_dict)
+        .apply(highlight_min_cell, axis=1)
+    )
 
     st.dataframe(df_dev_styled, hide_index=True)
 
     # Download
-    excel_data = get_excel_download(df_dev)
+    excel_data = get_excel_download_highlight(df_dev)
 
     # Layout tombol (rata kanan)
     col1, col2, col3 = st.columns([2.3,2,1])
@@ -401,107 +354,105 @@ def page():
             icon=":material/download:",
         )
 
-    # # RANK VISUALIZATION
-    # st.subheader(f"📊 Rank Visualization")
+    # VISUALIZATIONN
+    st.markdown("##### 📊 Visualization")
 
-    # # Rank Visualization per Component
-    # col0 = df.columns[0]  # kolom index pertama
-    # vendor_cols = df.columns[1:]
+    scope_col = df_clean.columns[0]
+    vendor_cols = df_clean.columns[1:]
 
-    # # Buat tab berdasarkan nilai unik kolom pertama
-    # tab_names = df[col0].unique()
-    # tabs = st.tabs([str(name) for name in tab_names])
+    # Tab
+    tab_names = df_clean[scope_col].unique()
+    tabs = st.tabs([str(name) for name in tab_names])
 
-    # for i, tab in enumerate(tabs):
-    #     tab_name = tab_names[i]
-    #     # tab.subheader(f"📊 Rank Visualization")
-    #     # tab.caption("Hooray! You’ve got the bidder with the lowest offer 🎉")
+    for i, tab in enumerate(tabs):
+        tab_name = tab_names[i]
 
-    #     # Ambil data untuk tab ini
-    #     df_tab = df[df[col0] == tab_name][vendor_cols].copy()
+        # Ambil data untuk tab ini
+        df_tab = df_clean[df_clean[scope_col] == tab_name][vendor_cols].copy()
 
-    #     # Hitung total per vendor (di sini pakai sum jika ada multiple rows per tab)
-    #     ranked_sum = df_tab.sum().sort_values(ascending=True)
+        # Hitung total per vendor
+        ranked_sum = df_tab.sum().sort_values(ascending=True)
 
-    #     # Siapkan dataframe chart
-    #     df_chart = (
-    #         ranked_sum.reset_index()
-    #         .rename(columns={"index": "Vendor", 0: "Total"})
-    #         .sort_values("Total", ascending=True)
-    #     )
+        df_chart = (
+            ranked_sum.reset_index()
+            .rename(columns={"index": "Vendor", 0:"Total"})
+            .sort_values("Total", ascending=True)
+        )
 
-    #     # Filter vendor dengan nilai 0 atau None
-    #     df_chart_filtered = df_chart[df_chart["Total"] > 0].copy()
-    #     df_chart_filtered["Rank"] = range(1, len(df_chart_filtered) + 1)
-    #     df_chart_filtered["Mid"] = df_chart_filtered["Total"] / 2
+        # Filter vendor dengan nilai 0 atau None
+        df_chart_filtered = df_chart[df_chart["Total"] > 0].copy()
+        df_chart_filtered["Rank"] = range(1, len(df_chart_filtered) + 1)
+        df_chart_filtered["Mid"] = df_chart_filtered["Total"] / 2
 
-    #     # Format string ribuan
-    #     df_chart_filtered["Total_str"] = df_chart_filtered["Total"].apply(lambda x: f"{int(x):,}".replace(",", "."))
-    #     df_chart_filtered["Legend"] = df_chart_filtered.apply(lambda x: f"Rank {x['Rank']} - {x['Total_str']}", axis=1)
+        # Format string ribuan
+        df_chart_filtered["Total_str"] = df_chart_filtered["Total"].apply(lambda x: f"{int(x):,}".replace(",", "."))
+        df_chart_filtered["Legend"] = df_chart_filtered.apply(lambda x: f"Rank {x['Rank']} - {x['Total_str']}", axis=1)
 
-    #     # Warna manual per vendor
-    #     colors_list = ["#F94144", "#F3722C", "#F8961E", "#F9C74F", "#90BE6D", "#43AA8B", "#577590", "#E54787", "#BF219A", "#8E0F9C", "#4B1D91"]
-    #     vendor_colors = {v: c for v, c in zip(df_chart_filtered["Legend"], colors_list)}
+        # Warna manual per vendor
+        colors_list = ["#F94144", "#F3722C", "#F8961E", "#F9C74F", "#90BE6D", "#43AA8B", "#577590", "#E54787", "#BF219A", "#8E0F9C", "#4B1D91"]
+        vendor_colors = {v: c for v, c in zip(df_chart_filtered["Legend"], colors_list)}
 
-    #     highlight = alt.selection_point(on='mouseover', fields=['Vendor'], nearest=True)
+        # Format angka besar di sumbu Y → jadi singkat (1K, 1M)
+        y_axis = alt.Axis(title=None, grid=False, format=".0s", labelPadding=12)
 
-    #     # Bars
-    #     bars = (
-    #         alt.Chart(df_chart_filtered)
-    #         .mark_bar()
-    #         .encode(
-    #             x=alt.X("Vendor:N", axis=alt.Axis(title=None)),
-    #             y=alt.Y("Total:Q", axis=alt.Axis(title=None, grid=False),
-    #                     scale=alt.Scale(domain=[0, df_chart_filtered["Total"].max() * 1.1])
-    #             ),
-    #             color=alt.Color("Legend:N", title="Total Offer by Rank",
-    #             scale=alt.Scale(domain=list(vendor_colors.keys()), 
-    #                             range=list(vendor_colors.values()))
-    #             ),
-    #             tooltip=[
-    #                 alt.Tooltip("Vendor:N", title="Vendor"),
-    #                 alt.Tooltip("Total_str:N", title="Total (USD)")
-    #             ]
-    #         ).add_params(highlight)
-    #     )
+        highlight = alt.selection_point(on='mouseover', fields=['Vendor'], nearest=True)
 
-    #     tab.caption(" ")
-    #     # Rank text
-    #     rank_text = (
-    #         alt.Chart(df_chart_filtered)
-    #         .mark_text(
-    #             dy=-7,           # geser teks sedikit ke atas
-    #             color="gray", 
-    #             fontWeight="bold"
-    #         )
-    #         .encode(
-    #             x="Vendor:N",
-    #             y="Total:Q",     # di atas bar
-    #             text="Rank:N"
-    #         )
-    #     )
+        # Bars
+        bars = (
+            alt.Chart(df_chart_filtered)
+            .mark_bar()
+            .encode(
+                x=alt.X("Vendor:N", axis=alt.Axis(title=None)),
+                y=alt.Y("Total:Q", axis=y_axis,
+                        scale=alt.Scale(domain=[0, df_chart_filtered["Total"].max() * 1.1])
+                ),
+                color=alt.Color("Legend:N", title="Total Offer by Rank",
+                scale=alt.Scale(domain=list(vendor_colors.keys()), 
+                                range=list(vendor_colors.values()))
+                ),
+                tooltip=[
+                    alt.Tooltip("Vendor:N", title="Vendor"),
+                    alt.Tooltip("Total_str:N", title="Total (USD)")
+                ]
+            ).add_params(highlight)
+        )
 
-    #     # Border frame
-    #     frame = (
-    #         alt.Chart()
-    #         .mark_rect(stroke='gray', strokeWidth=1, fillOpacity=0)
-    #     )
+        # Rank text
+        rank_text = (
+            alt.Chart(df_chart_filtered)
+            .mark_text(
+                dy=-7,           # geser teks sedikit ke atas
+                color="gray", 
+                fontWeight="bold"
+            )
+            .encode(
+                x="Vendor:N",
+                y="Total:Q",     # di atas bar
+                text="Rank:N"
+            )
+        )
 
-    #     # Gabungkan chart
-    #     chart = (bars + rank_text + frame).properties(
-    #         title=f"{tab_name}: Comparative Bidder Ranking"
-    #     ).configure_title(
-    #         anchor='middle', 
-    #         offset=12
-    #     ).configure_legend(
-    #         titleFontSize=12,        
-    #         titleFontWeight="bold",  
-    #         labelFontSize=12,        
-    #         labelLimit=300,        
-    #         orient="right"
-    #     )
+        # Border frame
+        frame = (
+            alt.Chart()
+            .mark_rect(stroke='gray', strokeWidth=1, fillOpacity=0)
+        )
 
-    #     # Tampilkan
-    #     tab.altair_chart(chart)
+        # Gabungkan chart
+        chart = (bars + rank_text + frame).properties(
+            title=f"{tab_name}: Comparative Bidder Ranking"
+        ).configure_title(
+            anchor='middle',
+            fontSize=13, 
+            offset=12,
+            fontWeight="bold"
+        ).configure_legend(
+            titleFontSize=11,        
+            titleFontWeight="bold",  
+            labelFontSize=10,        
+            labelLimit=300,        
+            orient="right"
+        )
 
-    # # st.divider()
+        # Tampilkan
+        tab.altair_chart(chart)
