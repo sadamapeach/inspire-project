@@ -811,9 +811,9 @@ def page():
 
     # VISUALIZATIONN
     st.markdown("##### 📊 Visualization")
-    tab1, tab2 = st.tabs(["Win Rate Trend", "Price Trend"])
+    tab1, tab2 = st.tabs(["Winning Performance", "Price Trend"])
 
-    # WIN RATE TRENDD
+    # WINNING PERFORMANCEE
     # Gabungkan semua round
     df_all = df_analysis_summary.copy()
 
@@ -875,7 +875,7 @@ def page():
                     tickCount=win_summary["Wins"].nunique() + 1
                 )
             ),
-            color=alt.Color("VENDOR:N", title="VENDOR", sort=vendor_order)
+            color=alt.Color("VENDOR:N", title="Vendor", sort=vendor_order)
         )
         .properties(
             height=400,
@@ -883,7 +883,8 @@ def page():
             title="Winning Performance Across Rounds"
         ).configure_title(
             anchor='middle', 
-            offset=12
+            offset=12,
+            fontSize=14
         )
         .configure_view(stroke='gray', strokeWidth=1)
         .configure_point(size=60)
@@ -915,80 +916,204 @@ def page():
     win_table = win_table.sort_values("Total Wins", ascending=False).reset_index(drop=True)
 
     # st.dataframe(win_table, hide_index=True)
+    tab1.write("")
     tab1.altair_chart(chart)
-    tab1.dataframe(win_table, hide_index=True)
 
+    with tab1:
+        with st.expander("See explanation"):
+            st.write('''
+                The visualization above shows the number of wins each vendor
+                achieves in every tender round. A win is counted based on which
+                vendor becomes the best bidder **(1st Vendor)** for each scope.
+                     
+                **💡 How to interpret the chart**
+                     
+                - High Wins Value  
+                     Vendor is highly competitive in that round and wins more scopes
+                     than others.  
+                - Increasing Wins Across Rounds  
+                     Indicates improving perfomance or more competitive pricing in later 
+                     rounds.  
+                - Decreasing Wins Across Rounds  
+                     Shows declining competitiveness, with the vendor losing more scopes
+                     compared the previous rounds.  
+                - Zero Wins in a Round  
+                     Vendor did not win any scope in that round, indicating weak competitiveness
+                     for that stage.
+            ''')
+            st.dataframe(win_table, hide_index=True)
 
-    # # Price Movement
-    # st.write(" ")
-    # st.markdown("##### 🌍 Trend of Price Movement per Scope")
- 
-    # col_vendor = df.columns[0]
-    # col_round  = df.columns[1]
-    # col_scope  = df.columns[2]
-    # col_price  = df.columns[3]
- 
-    # # --- Normalisasi nama vendor biar konsisten ---
-    # df[col_vendor] = (
-    #     df[col_vendor]
-    #     .astype(str)
-    #     .str.strip()      # Hilangkan spasi depan/belakang
-    #     .str.upper()      # Ubah ke huruf besar semua
-    # )
- 
-    # # --- Tab per vendor
-    # vendors = df[col_vendor].unique()
-    # tabs = st.tabs([f"{v}" for v in vendors])
- 
-    # # Inisialisasi list untuk simpan hasil semua vendor
-    # df_all_vendors = []
- 
-    # for i, v in enumerate(vendors):
-    #     with tabs[i]:
-    #         # Filter data vendor
-    #         df_vendor = df[df[col_vendor] == v].copy().reset_index(drop=True)
- 
-    #         # Tambahkan kolom order untuk handle duplicate Scope
-    #         df_vendor["__order"] = df_vendor.groupby([col_scope, col_round]).cumcount()
- 
-    #         # Pivot: scope sebagai index, round sebagai kolom, value = UPL
-    #         df_pivot = (
-    #             df_vendor
-    #             .pivot_table(
-    #                 index=[col_scope, "__order"],
-    #                 columns=col_round,
-    #                 values=col_price,
-    #                 aggfunc="first",
-    #                 sort=False
-    #             )
-    #             .fillna(0)
-    #             .reset_index()
-    #         )
- 
-           
-    #         # Terapkan pembulatan
-    #         num_cols = [c for c in df_pivot.columns if c not in [col_scope, "__order"]]
-    #         for c in num_cols:
-    #             df_pivot[c] = df_pivot[c].apply(lambda x: round_half_up(x) if pd.notna(x) else x)
- 
-    #         # Tambahkan kolom chart (list dari tiap baris)
-    #         # df_pivot["Price Trend"] = df_pivot[[c for c in num_cols if c != "__order"]].values.tolist()
-    #         df_pivot["Price Trend"] = (
-    #             df_pivot[[c for c in num_cols if c != "__order"]]
-    #             .apply(lambda x: str(list(x)), axis=1)
-    #         )
- 
-    #         # Ambil hanya kolom numerik (rounds) untuk hitung min/max
-    #         numeric_cols = df_pivot.select_dtypes(include="number").columns
-    #         if len(numeric_cols) > 0:
-    #             y_min = int(df_pivot[numeric_cols].min().min())
-    #             y_max = int(df_pivot[numeric_cols].max().max())
-    #         else:
-    #             y_min, y_max = 0, 0
- 
-    #         # Hapus kolom pembantu dan urutkan ulang
-    #         df_pivot = df_pivot.sort_values(["__order", col_scope]).drop(columns="__order").reset_index(drop=True)
- 
-    #         # Urutkan scope sesuai kemunculan awal
-    #         scope_order = df_vendor[col_scope].drop_duplicates()
-    #         df_pivot = df_pivot.set_index(col_scope).loc[scope_order].reset_index()
+            # Simpan hasil ke variabel
+            excel_data = get_excel_download(win_table)
+
+            # Layout tombol (rata kanan)
+            col1, col2, col3 = st.columns([3,1,1])
+            with col3:
+                st.download_button(
+                    label="Download",
+                    data=excel_data,
+                    file_name="Win Rate Trend Summary.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    icon=":material/download:"
+                )
+
+    # PRICEE TRENDD
+    trend_order = ["No Change", "Consistently Down", "Consistently Up", "Fluctuating"]
+
+    # Ringkas jumlah kemunculan per vendor per trend
+    trend_summary = (
+        df_pivot.groupby([vendor_col, "PRICE TREND"])
+                .size()
+                .reset_index(name="Count")
+    )
+
+    trend_summary["PRICE TREND"] = pd.Categorical(
+        trend_summary["PRICE TREND"],
+        categories=trend_order,
+        ordered=True
+    )
+
+    # Urutan vendor
+    vendor_order = (
+        trend_summary.groupby(vendor_col)["Count"]
+        .sum()
+        .sort_values(ascending=False)
+        .index.tolist()
+    )
+
+    # Warna vendor konsisten (optional)
+    vendor_colors = [
+        "#32AAB5", "#E7D39A", "#F1AA60", "#F27B68",
+        "#E54787", "#BF219A", "#8E0F9C", "#4B1D91",
+        "#246BCE", "#1EC8A5", "#F8C537"
+    ]
+
+    # Mapping warna
+    color_map = {
+        v: vendor_colors[i % len(vendor_colors)]
+        for i, v in enumerate(vendor_order)
+    }
+
+    # Format angka ribuan pada sumbu Y
+    y_axis = alt.Axis(
+        title="Number of Occurrences",
+        # grid=False,
+        labelPadding=12,
+        format="d"   # angka bulat, bukan 1k/1m
+    )
+
+    # Chart
+    bars = (
+        alt.Chart(trend_summary)
+            .mark_bar()
+            .encode(
+                x=alt.X(
+                    "PRICE TREND:N",
+                    sort=trend_order,
+                    axis=alt.Axis(labelAngle=0),
+                    title=None
+                ),
+                y=alt.Y(
+                    "Count:Q",
+                    axis=y_axis,
+                    title="Number of Occurrences",
+                    scale=alt.Scale(domain=[0, trend_summary["Count"].max() * 1.15])
+                ),
+                color=alt.Color(
+                    f"{vendor_col}:N",
+                    title="Vendor",
+                    sort=vendor_order
+                ),
+                xOffset=f"{vendor_col}:N"
+            )
+    )
+
+    labels = (
+        alt.Chart(trend_summary)
+            .mark_text(
+                dy=-7,                # geser sedikit ke atas
+                dx=7,
+                fontSize=10,
+                fontWeight="bold",
+                color="gray"
+            )
+            .encode(
+                x=alt.X(
+                    "PRICE TREND:N",
+                    sort=trend_order
+                ),
+                y=alt.Y("Count:Q"),
+                text=alt.Text("Count:Q"),
+                xOffset=f"{vendor_col}:N"   # penting: supaya posisinya sama dengan bar!
+            )
+    )
+
+    trend_chart = (
+        (bars + labels)
+            .properties(
+                height=400,
+                padding={"right": 15},
+                width="container",
+                title="Price Trend Distribution per Vendor"
+            )
+            .configure_title(anchor="middle", offset=12, fontSize=14)
+            .configure_view(stroke="gray", strokeWidth=1)
+            .configure_axis(labelFontSize=12, titleFontSize=13)
+            .configure_legend(
+                titleFontSize=12,
+                titleFontWeight="bold",
+                labelFontSize=12,
+                labelLimit=300,
+                orient="bottom"
+            )
+    )
+
+    tab2.write("")
+    tab2.altair_chart(trend_chart)
+
+    trend_table = (
+        trend_summary
+            .pivot_table(
+                index="PRICE TREND",
+                columns=vendor_col,
+                values="Count",
+                aggfunc="sum",
+                fill_value=0
+            )
+            .reindex(trend_order)   # pastikan urut
+            .reset_index()
+    )
+
+    with tab2:
+        with st.expander("See explanation"):
+            st.write('''
+                The chart above shows the number of occurrences of each **Price 
+                Trend** for every vendor based on the pivoted tender data.
+                     
+                **💡 How to interpret the chart**
+                     
+                - No Change  
+                     The vendor's price remains stable across all rounds or periods.
+                - Consistently Down  
+                     The vendor's price decreases continuously from one round to the next.
+                - Consistently Up  
+                     The vendor's price increases in every subsequent round.
+                - Fluctuating  
+                     The vendor's price moves up and down across the rounds.
+            ''')
+            st.dataframe(trend_table, hide_index=True)
+
+            # Simpan hasil ke variabel
+            excel_data = get_excel_download(trend_table)
+
+            # Layout tombol (rata kanan)
+            col1, col2, col3 = st.columns([3,1,1])
+            with col3:
+                st.download_button(
+                    label="Download",
+                    data=excel_data,
+                    file_name="Price Trend Summary.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    icon=":material/download:",
+                )
+
