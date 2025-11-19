@@ -114,7 +114,7 @@ def get_excel_download_highlight(df, sheet_name="Sheet1"):
 
 def page():
     # Header Title
-    st.header("6️⃣ Standard Deviation")
+    st.header("7️⃣ Standard Deviation")
     st.markdown(
         ":red-badge[Indosat] :orange-badge[Ooredoo] :green-badge[Hutchison]"
     )

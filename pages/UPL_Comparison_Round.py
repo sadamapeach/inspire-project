@@ -211,7 +211,7 @@ def get_excel_download_with_highlight_round(df, sheet_name="Sheet1"):
 
 def page():
     # Header Title
-    st.header("5️⃣ UPL Comparison Round by Round")
+    st.header("6️⃣ UPL Comparison Round by Round")
     st.markdown(
         ":red-badge[Indosat] :orange-badge[Ooredoo] :green-badge[Hutchison]"
     )

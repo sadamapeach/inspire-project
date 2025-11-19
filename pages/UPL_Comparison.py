@@ -154,7 +154,7 @@ def get_excel_download_highlight_1st_2nd_lowest(df, sheet_name="Your_file_name")
                 
 def page():
     # Header Title
-    st.header("4️⃣ UPL Comparison")
+    st.header("5️⃣ UPL Comparison")
     st.markdown(
         ":red-badge[Indosat] :orange-badge[Ooredoo] :green-badge[Hutchison]"
     )
