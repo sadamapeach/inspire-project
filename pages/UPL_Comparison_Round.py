@@ -962,7 +962,7 @@ def page():
 
     # Ringkas jumlah kemunculan per vendor per trend
     trend_summary = (
-        df_pivot.groupby([vendor_col, "PRICE TREND"])
+        df_pivot.groupby([vendor_col, "PRICE TREND"], observed=False)
                 .size()
                 .reset_index(name="Count")
     )
@@ -1005,7 +1005,7 @@ def page():
     trend_summary["VendorIndex"] = trend_summary[vendor_col].map(
         {v: i for i, v in enumerate(vendor_order)}
     )
-    trend_summary["TotalVendors"] = trend_summary.groupby("PRICE TREND")[vendor_col].transform("nunique")
+    trend_summary["TotalVendors"] = trend_summary.groupby("PRICE TREND", observed=False)[vendor_col].transform("nunique")
 
     # posisi label = vendor index + 0.5 (tengah bar)
     trend_summary["LabelOffset"] = trend_summary["VendorIndex"] + 0.5
@@ -1085,7 +1085,8 @@ def page():
                 columns=vendor_col,
                 values="Count",
                 aggfunc="sum",
-                fill_value=0
+                fill_value=0,
+                observed=False
             )
             .reindex(trend_order)   # pastikan urut
             .reset_index()
