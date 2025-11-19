@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import altair as alt
 import time
-import re
+import os
 from io import BytesIO
 
 def round_half_up(series):
@@ -166,3 +166,116 @@ def page():
         """,
         unsafe_allow_html=True
     )
+
+    # FILE UPLOADERR
+    st.markdown("##### 📂 Upload Files")
+    upload_files = st.file_uploader(
+        "Upload multiple Excel files (e.g., L2R1.xlsx, L2R2.xlsx)", 
+        type=["xlsx", "xls"],
+        accept_multiple_files=True
+    )
+
+    # Pre-processing
+    def clean_dataframe(df):
+        df_clean = df.replace(r'^\s*$', None, regex=True)
+
+        # Hapus baris dan kolom kosong
+        df_clean = df_clean.dropna(how="all", axis=0).dropna(how="all", axis=1)
+
+        # Jika header "Unnamed" -> set row 0 as header
+        if any("Unnamed" in str(c) for c in df_clean.columns):
+            df_clean.columns = df_clean.iloc[0]
+            df_clean = df_clean[1:].reset_index(drop=True)
+
+        # Konversi tipe data
+        df_clean = df_clean.convert_dtypes()
+
+        # Safe conversion from numpy types
+        def safe_convert(x):
+            if isinstance(x, (np.generic, np.number)):
+                return x.item()
+            return x
+        
+        df_clean = df_clean.map(safe_convert)
+        df_clean.columns = [safe_convert(c) for c in df_clean.columns]
+        df_clean.index = [safe_convert(i) for i in df_clean.index]
+
+        # Paksa nama kolom dan index menjadi string
+        df_clean.columns = df_clean.columns.map(str)
+        df_clean.index = df_clean.index.map(str)
+
+        return df_clean
+
+    if upload_files:
+        st.session_state["upload_multi_file_tco_by_round"] = upload_files
+        files_to_process = upload_files
+    
+    elif "upload_multi_file_tco_by_round" in st.session_state:
+        files_to_process = st.session_state["upload_multi_file_tco_by_round"]
+
+    else:
+        st.stop()
+    
+    all_rounds = []
+    if "already_processed_tco_by_round" not in st.session_state:
+        # --- Animasi proses upload ---
+        msg = st.toast("📂 Uploading file...")
+        time.sleep(1.2)
+
+        msg.toast("🔍 Reading sheets...")
+        time.sleep(1.2)
+
+        msg.toast("✅ File uploaded successfully!")
+        time.sleep(0.5)
+
+    for file in files_to_process:
+        # STEP 1: ambil nama file sebagai ROUND
+        filename = os.path.splitext(file.name)[0]
+
+        # STEP 2: baca sheet dalam file
+        xls = pd.ExcelFile(file)
+        df_raw = pd.read_excel(xls)
+        df_clean = clean_dataframe(df_raw)  # cleaning
+
+        # STEP 3: merge semua sheet dalam 1 file
+        df_clean.insert(0, "ROUND", filename)
+        all_rounds.append(df_clean)
+
+    # STEP 4: MERGE SEMUA FILEE
+    df_final = pd.concat(all_rounds, ignore_index=True)
+
+    # Simpan ke session
+    st.session_state["merge_tco_by_round"] = df_final
+    st.session_state["already_processed_tco_by_round"] = True
+
+    st.divider()
+   
+    # MERGEE DATA
+    st.markdown("##### 🗃️ Merge Data")
+    st.caption(f"Successfully consolidated data from **{len(files_to_process)} files**.")
+
+    # Pembulatan
+    num_cols = df_final.select_dtypes(include=["number"]).columns
+    df_final[num_cols] = df_final[num_cols].apply(round_half_up)
+
+    # Format rupiah
+    df_styled = (
+        df_final.style
+        .format({col: format_rupiah for col in num_cols})
+        .apply(highlight_total_row_v2, axis=1)
+    )
+    st.dataframe(df_styled, hide_index=True)
+
+    # Download
+    excel_data = get_excel_download_highlight_total(df_final)
+    col1, col2, col3 = st.columns([2.3,2,1])
+    with col3:
+        st.download_button(
+            label="Download",
+            data=excel_data,
+            file_name="Merge TCO Round.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            icon=":material/download:",
+        )
+
+    st.divider()
