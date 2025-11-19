@@ -239,6 +239,32 @@ def page():
 
         # STEP 3: merge semua sheet dalam 1 file
         df_clean.insert(0, "ROUND", filename)
+
+        # Tambahkan "TOTAL" jika belum ada
+        scope_col = df_clean.columns[1]
+        # Cek apakah sudah ada baris TOTAL
+        has_total = df_clean.apply(
+            lambda row: row.astype(str).str.upper().str.contains("TOTAL").any(),
+            axis=1
+        ).any()
+
+        if not has_total:
+            # Buat baris TOTAL baru
+            total_row = {col: "" for col in df_clean.columns}
+
+            # Isi nilai row TOTAL
+            total_row["ROUND"] = filename
+            total_row[scope_col] = "TOTAL"
+
+            # Hitung jumlah vendor per kolom (skip NaN)
+            vendor_cols = df_clean.select_dtypes(include=["int", "float"]).columns
+            for v in vendor_cols:
+                total_row[v] = df_clean[v].sum()
+
+            # Tambahkan ke df
+            df_clean = pd.concat([df_clean, pd.DataFrame([total_row])], ignore_index=True)
+        
+        # Masukkan ke list
         all_rounds.append(df_clean)
 
     # STEP 4: MERGE SEMUA FILEE
@@ -279,3 +305,85 @@ def page():
         )
 
     st.divider()
+
+    # COSTT SUMMARY
+    st.markdown("##### 📑 Cost Summary")
+
+    # Ambil semua kolom kecuali "ROUND"
+    non_round_cols = [c for c in df_final.columns if c != "ROUND"]
+
+    # Identifikasi kolom
+    scope_cols = df_final[non_round_cols].select_dtypes(exclude=["number"]).columns.tolist()
+    vendor_cols = df_final[non_round_cols].select_dtypes(include=['number']).columns.tolist()
+
+    # Melt (Unpivot)
+    df_summary = df_final.melt(
+        id_vars=["ROUND"] + scope_cols,
+        value_vars=vendor_cols,
+        var_name="VENDOR",
+        value_name='PRICE'
+    )
+
+    # Reorder
+    final_cols = ["ROUND", "VENDOR"] + scope_cols + ["PRICE"]
+    df_summary = df_summary[final_cols]
+
+    # Sort
+    df_summary = df_summary.sort_values(["ROUND", "VENDOR"] + scope_cols).reset_index(drop=True)
+
+    # Slicer
+    all_round  = sorted(df_summary["ROUND"].dropna().unique())
+    all_vendor = sorted(df_summary["VENDOR"].dropna().unique())
+
+    col_sel_1, col_sel_2 = st.columns(2)
+    with col_sel_1:
+        selected_round = st.multiselect(
+            "Filter: Round",
+            options=all_round,
+            default=None,
+            placeholder="Choose one or more rounds"
+        )
+    with col_sel_2:
+        selected_vendor = st.multiselect(
+            "Filter: Vendor",
+            options=all_vendor,
+            default=None,
+            placeholder="Choose one or more vendors"
+        )
+
+    if selected_round and selected_vendor:
+        df_filtered = df_summary[
+            df_summary["ROUND"].isin(selected_round) &
+            df_summary['VENDOR'].isin(selected_vendor)
+        ]
+    elif selected_round:
+        df_filtered = df_summary[df_summary["ROUND"].isin(selected_round)]
+    elif selected_vendor:
+        df_filtered = df_summary[df_summary["VENDOR"].isin(selected_vendor)]
+    else:
+        df_filtered = df_summary.copy()
+
+    # Format
+    num_cols = df_filtered.select_dtypes(include=["number"]).columns
+    df_filtered[num_cols] = df_filtered[num_cols].apply(round_half_up)
+
+    df_summary_styled = (
+        df_filtered.style
+        .format({col: format_rupiah for col in num_cols})
+        .apply(highlight_total_row_v2, axis=1)
+    )
+
+    st.caption(f"✨ Total number of data entries: **{len(df_filtered)}**")
+    st.dataframe(df_summary_styled, hide_index=True)
+
+    # Download
+    excel_data = get_excel_download_highlight_total(df_filtered)
+    col1, col2, col3 = st.columns([2.3,2,1])
+    with col3:
+        st.download_button(
+            label="Download",
+            data=excel_data,
+            file_name="Cost Summary TCO Round.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            icon=":material/download:",
+        )
