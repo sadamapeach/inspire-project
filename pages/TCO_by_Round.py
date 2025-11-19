@@ -591,6 +591,35 @@ def page():
     df_pivot["STANDARD DEVIATION"] = df_pivot[round_order].std(axis=1, ddof=0).round(4)
     df_pivot["PRICE STABILITY INDEX (%)"] = df_pivot.apply(compute_psi, axis=1).round(2)
 
+    # Adding "TOTAL" columns
+    round_cols = round_order.copy()   # ambil kolom ROUND saja untuk dihitung
+
+    total_rows = []
+    for vendor in df_pivot["VENDOR"].unique():
+        df_vendor = df_pivot[df_pivot["VENDOR"] == vendor]
+
+        # Hitung sum per ROUND
+        total_data = df_vendor[round_cols].sum(numeric_only=True)
+
+        # Buat row kosong
+        # total_row = {col: "" for col in df_pivot.columns}
+        total_row = {col: np.nan for col in df_pivot.columns}
+
+        total_row["VENDOR"] = vendor
+        total_row[scope_cols[0]] = "TOTAL"
+
+        # Masukkan total ROUND
+        for col in round_cols:
+            total_row[col] = total_data[col]
+
+        total_rows.append(total_row)
+
+    df_total_rows = pd.DataFrame(total_rows)
+    df_pivot = pd.concat([df_pivot, df_total_rows], ignore_index=True)
+
+    # Urutkan lagi: vendor tetap grouping
+    df_pivot = df_pivot.sort_values(["VENDOR", scope_cols[0]], key=lambda s: s.replace("TOTAL", "ZZZ"))
+
     # Tambahkan slicer 
     all_vendor = sorted(df_pivot["VENDOR"].dropna().unique())
     all_trend  = sorted(df_pivot["PRICE TREND"].dropna().unique())
@@ -637,14 +666,22 @@ def page():
     df_pivot_style = (
         df_filter_pivot.style
         .format(format_dict)
+        .apply(highlight_total_row_v2, axis=1)
     )
 
     # Tampilkan
     st.caption(f"✨ Total number of data entries: **{len(df_filter_pivot)}**")
     st.dataframe(df_pivot_style, hide_index=True)
 
+    # --- Prepare dataframe for Excel export ---
+    df_export = df_filter_pivot.copy()
+
+    # Replace NaN / Inf with empty string to avoid xlsxwriter error
+    df_export = df_export.replace([np.nan, np.inf, -np.inf], "")
+
     # Download
-    excel_data = get_excel_download(df_filter_pivot)
+    excel_data = get_excel_download_highlight_total(df_export)
+    # excel_data = get_excel_download(df_filter_pivot)
     col1, col2, col3 = st.columns([2.3,2,1])
     with col3:
         st.download_button(
