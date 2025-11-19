@@ -387,3 +387,121 @@ def page():
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             icon=":material/download:",
         )
+
+    st.divider()
+
+    # BIDD & PRICEE ANALYSIS
+    st.markdown("##### 🧠 Bid & Price Analysis")
+
+    # Hapus row total 
+    df_analysis = df_final[
+        ~df_final.apply(lambda row: row.astype(str).str.contains("TOTAL", case=False))
+        .any(axis=1)
+    ].copy()
+
+    non_round_cols = [c for c in df_analysis.columns if c != "ROUND"]
+    scope_cols = df_analysis[non_round_cols].select_dtypes(exclude=["number"]).columns.tolist()
+    vendor_cols = df_analysis[non_round_cols].select_dtypes(include=['number']).columns.tolist()
+    
+    # Hitung 1st & 2nd lowest
+    df_analysis["1st Lowest"] = df_analysis[vendor_cols].min(axis=1)
+    df_analysis["1st Vendor"] = df_analysis[vendor_cols].idxmin(axis=1)
+
+    # untuk 2nd lowest -> sort values per row
+    df_analysis["2nd Lowest"] = df_analysis[vendor_cols].apply(
+        lambda row: row.nsmallest(2).iloc[-1] if len(row.dropna()) >= 2 else np.nan,
+        axis=1
+    )
+    df_analysis["2nd Vendor"] = df_analysis[vendor_cols].apply(
+        lambda row: row.nsmallest(2).index[-1] if len(row.dropna()) >= 2 else "",
+        axis=1
+    )
+
+    # Gap %
+    df_analysis["Gap 1 to 2 (%)"] = (
+        (df_analysis["2nd Lowest"] - df_analysis["1st Lowest"]) / df_analysis["1st Lowest"] * 100
+    ).round(2)
+
+    # Median price
+    df_analysis["Median Price"] = df_analysis[vendor_cols].median(axis=1)
+
+    # Vendor → Median (%)
+    for v in vendor_cols:
+        df_analysis[f"{v} to Median (%)"] = (
+            (df_analysis[v] - df_analysis["Median Price"]) / df_analysis["Median Price"] * 100
+        ).round(2)
+
+    # Simpan ke session state
+    st.session_state["bid_and_price_analysis_tco_by_round"] = df_analysis
+
+    # --- 🎯 Tambahkan slicer
+    all_round = sorted(df_analysis["ROUND"].dropna().unique())
+    all_1st = sorted(df_analysis["1st Vendor"].dropna().unique())
+    all_2nd = sorted(df_analysis["2nd Vendor"].dropna().unique())
+
+    col_sel_1, col_sel_2, col_sel_3 = st.columns(3)
+    with col_sel_1:
+        selected_round = st.multiselect(
+            "Filter: Round",
+            options=all_round,
+            default=[],
+            placeholder="Choose rounds",
+        )
+    with col_sel_2:
+        selected_1st = st.multiselect(
+            "Filter: 1st vendor",
+            options=all_1st,
+            default=[],
+            placeholder="Choose vendors",
+        )
+    with col_sel_3:
+        selected_2nd = st.multiselect(
+            "Filter: 2nd vendor",
+            options=all_2nd,
+            default=[],
+            placeholder="Choose vendors",
+        )
+
+    # --- Terapkan filter AND secara dinamis
+    df_filtered_analysis = df_analysis.copy()
+
+    if selected_round:
+        df_filtered_analysis = df_filtered_analysis[df_filtered_analysis["ROUND"].isin(selected_round)]
+
+    if selected_1st:
+        df_filtered_analysis = df_filtered_analysis[df_filtered_analysis["1st Vendor"].isin(selected_1st)]
+
+    if selected_2nd:
+        df_filtered_analysis = df_filtered_analysis[df_filtered_analysis["2nd Vendor"].isin(selected_2nd)]
+
+    # Format
+    num_cols = df_filtered_analysis.select_dtypes(include=["number"]).columns
+    format_dict = {col: format_rupiah for col in num_cols}
+    format_dict.update({"Gap 1 to 2 (%)": "{:.1f}%"})
+    for vendor in vendor_cols:
+        format_dict[f"{vendor} to Median (%)"] = "{:+.1f}%"
+
+    df_analysis_styled = (
+        df_filtered_analysis.style
+        .format(format_dict)
+        .apply(lambda row: highlight_1st_2nd_vendor(row, df_filtered_analysis.columns), axis=1)
+    )
+
+    st.caption(f"✨ Total number of data entries: **{len(df_filtered_analysis)}**")
+    st.dataframe(df_analysis_styled, hide_index=True)
+
+    # Download button to Excel
+    excel_data = get_excel_download_highlight_1st_2nd_lowest(df_filtered_analysis)
+
+    # Layout tombol (rata kanan)
+    col1, col2, col3 = st.columns([2.3,2,1])
+    with col3:
+        st.download_button(
+            label="Download",
+            data=excel_data,
+            file_name="Bid & Price Analysis - TCO by Round.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            icon=":material/download:"
+        )
+    
+    st.divider()

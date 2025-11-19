@@ -561,7 +561,6 @@ def page():
             options=all_round,
             default=[],
             placeholder="Choose rounds",
-            key="filter_round"
         )
     with col_sel_2:
         selected_1st = st.multiselect(
@@ -569,7 +568,6 @@ def page():
             options=all_1st,
             default=[],
             placeholder="Choose vendors",
-            key="filter_1st_vendor"
         )
     with col_sel_3:
         selected_2nd = st.multiselect(
@@ -577,7 +575,6 @@ def page():
             options=all_2nd,
             default=[],
             placeholder="Choose vendors",
-            key="filter_2nd_vendor"
         )
 
     # --- Terapkan filter AND secara dinamis
