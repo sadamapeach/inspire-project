@@ -58,7 +58,7 @@ def highlight_1st_2nd_vendor(row, columns):
     
 # Download button to Excel
 @st.cache_data
-def get_excel_download(df, sheet_name="Your_file_name"):
+def get_excel_download(df, sheet_name="Sheet1"):
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name=sheet_name)
@@ -117,7 +117,7 @@ def get_excel_download_highlight_total(df, sheet_name="Sheet1"):
     return output.getvalue()
 
 # Download Highlight 1st & 2nd Vendors
-def get_excel_download_highlight_1st_2nd_lowest(df, sheet_name="Your_file_name"):
+def get_excel_download_highlight_1st_2nd_lowest(df, sheet_name="Sheet1"):
     output = BytesIO()
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
         df.to_excel(writer, index=False, sheet_name=sheet_name)
@@ -399,6 +399,8 @@ def page():
         .any(axis=1)
     ].copy()
 
+    df_no_total = df_analysis.copy()
+
     non_round_cols = [c for c in df_analysis.columns if c != "ROUND"]
     scope_cols = df_analysis[non_round_cols].select_dtypes(exclude=["number"]).columns.tolist()
     vendor_cols = df_analysis[non_round_cols].select_dtypes(include=['number']).columns.tolist()
@@ -505,3 +507,150 @@ def page():
         )
     
     st.divider()
+
+    # PRICE MOVEMENTT ANALYSIS
+    st.markdown("##### 💸 Price Movement Analysis")
+
+    # Identifikasi kolom
+    non_round_cols = [c for c in df_no_total.columns if c != "ROUND"]
+    scope_cols = df_no_total[non_round_cols].select_dtypes(exclude=["number"]).columns.tolist()
+    vendor_cols = df_no_total[non_round_cols].select_dtypes(include=['number']).columns.tolist()
+
+    # Melt (Unpivot)
+    df_long = df_no_total.melt(
+        id_vars=["ROUND"] + scope_cols,
+        value_vars=vendor_cols,
+        var_name="VENDOR",
+        value_name="PRICE"
+    )
+
+    # PIVOT
+    df_pivot = df_long.pivot_table(
+        index=["VENDOR"] + scope_cols,
+        columns="ROUND",
+        values="PRICE",
+        aggfunc="first"
+    ).reset_index()
+
+    # Urutkan kolom ROUND
+    round_order = sorted([c for c in df_pivot.columns if c not in ["VENDOR"] + scope_cols])
+    df_pivot = df_pivot[["VENDOR"] + scope_cols + round_order]
+
+    # PRICE REDUCTION
+    def compute_price_reduction(row):
+        prices = row[round_order]
+        valid_prices = prices.dropna()
+
+        if len(valid_prices) < 2:
+            return pd.Series({
+                "PRICE REDUCTION (VALUE)": np.nan, 
+                "PRICE REDUCTION (%)": np.nan
+            })
+
+        first_val = valid_prices.iloc[0]
+        last_val  = valid_prices.iloc[-1]
+
+        reduction_value = last_val - first_val
+        reduction_pct   = (reduction_value / first_val) * 100
+
+        return pd.Series({
+            "PRICE REDUCTION (VALUE)": reduction_value,
+            "PRICE REDUCTION (%)": round(reduction_pct, 2)
+        }) 
+    
+    df_pivot[["PRICE REDUCTION (VALUE)", "PRICE REDUCTION (%)"]] = (
+        df_pivot.apply(compute_price_reduction, axis=1)
+    )
+
+    # PRICE TREND
+    def detect_trend(row):
+        prices = row[round_order].values.astype(float)
+        prices = prices[~np.isnan(prices)]
+
+        if len(prices) <= 1:
+            return "Insufficient Data"
+        if all(prices[i] > prices[i+1] for i in range(len(prices)-1)):
+            return "Consistently Down"
+        if all(prices[i] < prices[i+1] for i in range(len(prices)-1)):
+            return "Consistently Up"
+        if len(set(prices)) == 1:
+            return "No Change"
+        
+        return "Fluctuating"
+    
+    df_pivot["PRICE TREND"] = df_pivot.apply(detect_trend, axis=1)
+
+    # PRICE STABILITY INDEX (PSI)
+    def compute_psi(row):
+        prices = row[round_order].astype(float)
+        prices = prices[~np.isnan(prices)]
+        if len(prices) == 0:
+            return np.nan
+        return ((prices.max() - prices.min()) / prices.mean()) * 100
+    
+    df_pivot["STANDARD DEVIATION"] = df_pivot[round_order].std(axis=1, ddof=0).round(4)
+    df_pivot["PRICE STABILITY INDEX (%)"] = df_pivot.apply(compute_psi, axis=1).round(2)
+
+    # Tambahkan slicer 
+    all_vendor = sorted(df_pivot["VENDOR"].dropna().unique())
+    all_trend  = sorted(df_pivot["PRICE TREND"].dropna().unique())
+
+    col_sel_1, col_sel_2 = st.columns(2)
+    with col_sel_1:
+        selected_vendor = st.multiselect(
+            "Filter: Vendor",
+            options=all_vendor,
+            default=None,
+            placeholder="Choose one or more vendors",
+            key="filter_vendor"
+        )
+    with col_sel_2:
+        selected_trend = st.multiselect(
+            "Filter: Price Trend",
+            options=all_trend,
+            default=None,
+            placeholder="Choose one or more price trends",
+            key="filter_price_trend"
+        )
+
+    # Terapkan filter dengan logika AND
+    if selected_vendor and selected_trend:
+        df_filter_pivot = df_pivot[
+            df_pivot["VENDOR"].isin(selected_vendor) &
+            df_pivot["PRICE TREND"].isin(selected_trend)
+        ]
+    elif selected_vendor:
+        df_filter_pivot = df_pivot[df_pivot["VENDOR"].isin(selected_vendor)]
+    elif selected_trend:
+        df_filter_pivot = df_pivot[df_pivot["PRICE TREND"].isin(selected_trend)]
+    else:
+        df_filter_pivot = df_pivot.copy()
+
+    # Format
+    num_cols = df_filter_pivot.select_dtypes(include=["number"]).columns
+    format_dict = {col: format_rupiah for col in num_cols}
+    format_dict.update({
+        "PRICE REDUCTION (%)": "{:+.1f}%",
+        "PRICE STABILITY INDEX (%)": "{:.1f}%"
+    })
+
+    df_pivot_style = (
+        df_filter_pivot.style
+        .format(format_dict)
+    )
+
+    # Tampilkan
+    st.caption(f"✨ Total number of data entries: **{len(df_filter_pivot)}**")
+    st.dataframe(df_pivot_style, hide_index=True)
+
+    # Download
+    excel_data = get_excel_download(df_filter_pivot)
+    col1, col2, col3 = st.columns([2.3,2,1])
+    with col3:
+        st.download_button(
+            label="Download",
+            data=excel_data,
+            file_name="Price Movement Trend - TCO by Round.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            icon=":material/download:"
+        )

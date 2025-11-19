@@ -622,8 +622,6 @@ def page():
     st.divider()
 
     # PRICE MOVEMENTT ANALYSISS
-
-    # PRICE MOVEMENT ANALYSIS
     st.markdown("##### 💸 Price Movement Analysis")
 
     round_col  = raw_transpose.columns[0]
