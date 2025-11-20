@@ -576,22 +576,32 @@ def page():
     # --- Gabungkan semua region jadi satu DataFrame besar ---
     df_all_regions = pd.concat(all_regions_combined, ignore_index=True)
 
+    scope = df_all_regions.columns[1]
     # --- 🎯 Tambahkan slicer
-    all_round = sorted(df_all_regions["REGION"].dropna().unique())
+    all_region = sorted(df_all_regions["REGION"].dropna().unique())
+    all_scope = sorted(df_all_regions[scope].dropna().unique())
     all_1st = sorted(df_all_regions["1st Vendor"].dropna().unique())
     all_2nd = sorted(df_all_regions["2nd Vendor"].dropna().unique())
 
     with tab1:
-        col_sel_1, col_sel_2, col_sel_3 = st.columns(3)
+        col_sel_1, col_sel_2, col_sel_3, col_sel_4 = st.columns(4)
         with col_sel_1:
             selected_region = st.multiselect(
                 "Filter: Region",
-                options=all_round,
+                options=all_region,
                 default=[],
                 placeholder="Choose regions",
-                key="filter_region"
+                key="filter_region_2"
             )
         with col_sel_2:
+            selected_scope = st.multiselect(
+                "Filter: Scope",
+                options=all_scope,
+                default=[],
+                placeholder="Choose scopes",
+                key="filter_scope_2"
+            )
+        with col_sel_3:
             selected_1st = st.multiselect(
                 "Filter: 1st vendor",
                 options=all_1st,
@@ -599,7 +609,7 @@ def page():
                 placeholder="Choose vendors",
                 key="filter_1st_region"
             )
-        with col_sel_3:
+        with col_sel_4:
             selected_2nd = st.multiselect(
                 "Filter: 2nd vendor",
                 options=all_2nd,
@@ -613,6 +623,9 @@ def page():
 
         if selected_region:
             df_filtered_region = df_filtered_region[df_filtered_region["REGION"].isin(selected_region)]
+
+        if selected_scope:
+            df_filtered_region = df_filtered_region[df_filtered_region[scope].isin(selected_scope)]
 
         if selected_1st:
             df_filtered_region = df_filtered_region[df_filtered_region["1st Vendor"].isin(selected_1st)]
@@ -649,6 +662,313 @@ def page():
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 icon=":material/download:",
             )
+
+    # VISUALIZATIONN
+    tab1.markdown("##### 📊 Visualization")
+
+    with tab1:
+        subtab1, subtab2 = st.tabs(["Win Rate Trend", "Average Gap Trend"])
+
+        with subtab1:
+            # --- WIN RATE VISUALIZATION ---
+            # --- Hitung total kemenangan (1st & 2nd Vendor)
+            win1_counts = df_all_regions["1st Vendor"].value_counts(dropna=True).reset_index()
+            win1_counts.columns = ["Vendor", "Wins1"]
+
+            win2_counts = df_all_regions["2nd Vendor"].value_counts(dropna=True).reset_index()
+            win2_counts.columns = ["Vendor", "Wins2"]
+
+            # --- Hitung total partisipasi vendor ---
+            vendor_counts = (
+                df_all_regions[vendor_cols]
+                .notna()       # True kalau vendor berpartisipasi (ada harga)
+                .sum()         # Hitung True per kolom
+                .reset_index()
+            )
+            vendor_counts.columns = ["Vendor", "Total Participations"]
+
+            # --- Gabungkan semua ---
+            win_rate = (
+                vendor_counts
+                .merge(win1_counts, on="Vendor", how="left")
+                .merge(win2_counts, on="Vendor", how="left")
+                .fillna(0)
+            )
+
+            # --- Hitung Win Rate (%)
+            win_rate["1st Win Rate (%)"] = np.where(
+                win_rate["Total Participations"] > 0,
+                (win_rate["Wins1"] / win_rate["Total Participations"] * 100).round(1),
+                0
+            )
+            win_rate["2nd Win Rate (%)"] = np.where(
+                win_rate["Total Participations"] > 0,
+                (win_rate["Wins2"] / win_rate["Total Participations"] * 100).round(1),
+                0
+            )
+
+            # --- Siapkan data long-format untuk visualisasi ---
+            win_rate_long = win_rate.melt(
+                id_vars=["Vendor"],
+                value_vars=["1st Win Rate (%)", "2nd Win Rate (%)"],
+                var_name="Metric",
+                value_name="Percentage"
+            )
+
+            # --- Urutkan vendor berdasarkan 1st Win Rate tertinggi ---
+            vendor_order = (
+                win_rate.sort_values("1st Win Rate (%)", ascending=False)["Vendor"].tolist()
+            )
+
+            # --- Tentukan warna untuk kedua metrik ---
+            metric_colors = {
+                "1st Win Rate (%)": "#1f77b4",
+                "2nd Win Rate (%)": "#ff7f0e"     # biru
+            }
+
+            # --- Highlight interaktif ---
+            highlight = alt.selection_point(on='mouseover', fields=['Metric'], nearest=True)
+
+            # --- Batas atas dan bawah sumbu Y ---
+            y_max = win_rate_long["Percentage"].max()
+            if not np.isfinite(y_max) or y_max <= 0:
+                y_max = 1
+
+            # Pastikan data diurutkan sesuai vendor_order
+            win_rate_long["Vendor"] = pd.Categorical(win_rate_long["Vendor"], categories=vendor_order, ordered=True)
+            win_rate_long = win_rate_long.sort_values(["Metric", "Vendor"])
+
+            # --- Chart utama ---
+            base = (
+                alt.Chart(win_rate_long)
+                .encode(
+                    x=alt.X("Vendor:N", sort=vendor_order, title=None),
+                    y=alt.Y(
+                        "Percentage:Q",
+                        title="Win Rate (%)",
+                        scale=alt.Scale(domain=[0, y_max * 1.2])
+                    ),
+                    color=alt.Color(
+                        "Metric:N",
+                        scale=alt.Scale(
+                            domain=list(metric_colors.keys()),
+                            range=list(metric_colors.values())
+                        ),
+                        title="Rank"
+                    ),
+                    tooltip=[
+                        alt.Tooltip("Vendor:N", title="Vendor"),
+                        alt.Tooltip("Metric:N", title="Position"),
+                        alt.Tooltip("Percentage:Q", title="Win Rate (%)", format=".1f")
+                    ]
+                )
+            )
+
+            # --- Garis dengan titik ---
+            lines = base.mark_line(point=alt.OverlayMarkDef(size=70, filled=True), strokeWidth=3)
+
+            # --- Label persentase di atas titik ---
+            labels = base.mark_text(
+                align='center',
+                baseline='bottom',
+                dy=-7,
+                fontWeight='bold',
+                color='gray'
+            ).encode(
+                text=alt.Text("Percentage:Q", format=".1f")
+            ).transform_calculate(
+                label="format(datum.Percentage, '.1f') + '%'"
+            ).encode(
+                text="label:N"
+            )
+
+            # --- Gabungkan semua elemen ---
+            chart = (
+                lines + labels
+            ).properties(
+                height=400,
+                padding={"right": 15},
+                title="Vendor Win Rate Comparison (1st vs 2nd Place)"
+            ).configure_title(
+                anchor="middle",
+                offset=12,
+                fontSize=14
+            ).configure_axis(
+                labelFontSize=12,
+                titleFontSize=13
+            ).configure_view(
+                stroke='gray',
+                strokeWidth=1
+            ).configure_legend(
+                titleFontSize=12,
+                titleFontWeight="bold",
+                labelFontSize=12,
+                labelLimit=300,
+                orient="bottom"
+            )
+
+            st.write("")
+            # --- Tampilkan chart di Streamlit
+            st.altair_chart(chart)
+
+            # Kolom yang mau ditaruh di depan
+            cols_front = ["Wins1", "Wins2"]
+
+            # Sisanya (Vendor + kolom lain yang tidak ada di cols_front)
+            cols_rest = [c for c in win_rate.columns if c not in cols_front]
+
+            # Gabungkan urutannya
+            win_rate = win_rate[cols_rest[:1] + cols_front + cols_rest[1:]]
+
+            # --- Ganti nama kolom biar lebih konsisten & enak dibaca
+            df_summary = win_rate.rename(columns={
+                "Wins1": "1st Rank",
+                "Wins2": "2nd Rank"
+            })
+
+            with st.expander("See explanation"):
+                st.write('''
+                    The visualization above compares the win rate of each vendor
+                    based on how often they achieved 1st or 2nd place in all
+                    tender evaluations.  
+                            
+                    **💡 How to interpret the chart**  
+                            
+                    - High 1st Win Rate (%)  
+                        Vendor is highly competitive and often offers the best commercial terms.  
+                    - High 2nd Win Rate (%)  
+                        Vendor consistently performs well, often just slightly less competitive than the winner.  
+                    - Large Gap Between 1st & 2nd Win Rate  
+                        Shows clear market dominance by certain vendors.
+                ''')
+                st.dataframe(df_summary, hide_index=True)
+
+                # Simpan hasil ke variabel
+                excel_data = get_excel_download(df_summary, sheet_name="Win Rate Trend Summary")
+
+                # Layout tombol (rata kanan)
+                col1, col2, col3 = st.columns([3,1,1])
+                with col3:
+                    st.download_button(
+                        label="Download",
+                        data=excel_data,
+                        file_name="Win Rate Trend Summary.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        icon=":material/download:",
+                        key="download_Win_Rate_Trend_Tab1"
+                    )
+
+        with subtab2:
+            # --- AVERAGE GAP VISUALIZATION ---
+            # --- Hitung rata-rata Gap 1 to 2 (%) per Vendor (hanya untuk 1st Vendor)
+            df_gap = df_all_regions.copy()
+
+            # Ubah kolom 'Gap 1 to 2 (%)' ke numerik (hapus simbol %)
+            df_gap["Gap 1 to 2 (%)"] = (
+                df_gap["Gap 1 to 2 (%)"]
+                .replace("%", "", regex=True)
+                .astype(float)
+            )
+
+            # Hitung rata-rata gap per vendor (hanya vendor yang jadi 1st Lowest)
+            avg_gap = (
+                df_gap.groupby("1st Vendor", dropna=True)["Gap 1 to 2 (%)"]
+                .mean()
+                .reset_index()
+                .rename(columns={"1st Vendor": "Vendor", "Gap 1 to 2 (%)": "Average Gap (%)"})
+                .sort_values("Average Gap (%)", ascending=False)
+            )
+
+            # st.dataframe(avg_gap)
+
+            # Warna per vendor (biar konsisten kalau kamu sudah punya color mapping)
+            colors_list = ["#F94144", "#F3722C", "#F8961E", "#F9C74F", "#90BE6D",
+                        "#43AA8B", "#577590", "#E54787", "#BF219A", "#8E0F9C", "#4B1D91"]
+            vendor_colors = {v: c for v, c in zip(avg_gap["Vendor"].unique(), colors_list)}
+
+            # Interaksi hover
+            highlight = alt.selection_point(on='mouseover', fields=['Vendor'], nearest=True)
+
+            # --- Chart utama ---
+            bars = (
+                alt.Chart(avg_gap)
+                .mark_bar()
+                .encode(
+                    x=alt.X("Vendor:N", sort='-y', title=None),
+                    y=alt.Y("Average Gap (%):Q", title="Average Gap (%)", scale=alt.Scale(domain=[0, avg_gap["Average Gap (%)"].max() * 1.2])),
+                    color=alt.Color("Vendor:N",
+                                    scale=alt.Scale(domain=list(vendor_colors.keys()), range=list(vendor_colors.values())),
+                                    legend=None),
+                    tooltip=[
+                        alt.Tooltip("Vendor:N", title="Vendor"),
+                        alt.Tooltip("Average Gap (%):Q", title="Average Gap (%)", format=".1f")
+                    ]
+                )
+                .add_params(highlight)
+            )
+
+            # Label teks di atas bar
+            labels = (
+                alt.Chart(avg_gap)
+                .mark_text(dy=-7, fontWeight='bold', color='gray')
+                .encode(
+                    x="Vendor:N",
+                    y="Average Gap (%):Q",
+                    text=alt.Text("Average Gap (%):Q", format=".1f")  # Format angka
+                )
+                .transform_calculate(  # Tambahkan simbol %
+                    label_text="format(datum['Average Gap (%)'], '.1f') + '%'"
+                )
+                .encode(
+                    text="label_text:N"
+                )
+            )
+
+            # Frame luar untuk gaya rapi
+            frame = alt.Chart().mark_rect(stroke='gray', strokeWidth=1, fillOpacity=0)
+
+            avg_line = alt.Chart(avg_gap).mark_rule(color='gray', strokeDash=[4,2], size=1.75).encode(
+                y='mean(Average Gap (%)):Q'
+            )
+
+            # Gabungkan semua elemen
+            chart = (bars + labels + frame + avg_line).properties(
+                title="Average Gap (%) per 1st Vendor",
+                height=400
+            ).configure_title(
+                anchor='middle',
+                offset=12,
+                fontSize=14
+            ).configure_axis(
+                labelFontSize=12,
+                titleFontSize=13
+            ).configure_view(
+                stroke='gray',
+                strokeWidth=1
+            )
+
+            st.write("")
+            # --- Tampilkan di Streamlit ---
+            st.altair_chart(chart)
+
+            avg_value = avg_gap["Average Gap (%)"].mean()
+
+            # with st:
+            with st.expander("See explanation"):
+                st.write(f'''
+                    The chart above shows the average price difference between 
+                    the lowest and second-lowest bids for each vendor when they 
+                    rank 1st, indicating their pricing dominance or competitiveness.
+                            
+                    **💡 How to interpret the chart**  
+                            
+                    - High Gap  
+                        High gap indicates strong vendor dominance (much lower prices).  
+                    - Low Gap  
+                        Low gap indicates intense competition with similar pricing among vendors.  
+                    
+                    The dashed line represents the average gap across all vendors, serving as a benchmark ({avg_value:.1f}%).
+                ''')
 
     # TRANSPOSE
     # tab2.markdown("##### 🛸 Transpose Data")
@@ -1039,20 +1359,29 @@ def page():
 
     # --- 🎯 Tambahkan slicer
     all_scope = sorted(df_all_scopes["SCOPE"].dropna().unique())
+    all_region = sorted(df_all_scopes["REGION"].dropna().unique())
     all_1st = sorted(df_all_scopes["1st Vendor"].dropna().unique())
     all_2nd = sorted(df_all_scopes["2nd Vendor"].dropna().unique())
 
     with tab2:
-        col_sel_1, col_sel_2, col_sel_3 = st.columns(3)
+        col_sel_1, col_sel_2, col_sel_3, col_sel_4 = st.columns(4)
         with col_sel_1:
             selected_scope = st.multiselect(
                 "Filter: Scope",
                 options=all_scope,
                 default=[],
                 placeholder="Choose scopes",
-                key="filter_scope"
+                key="filter_scope_1"
             )
         with col_sel_2:
+            selected_region = st.multiselect(
+                "Filter: Region",
+                options=all_region,
+                default=[],
+                placeholder="Choose regions",
+                key="filter_region_1"
+            )
+        with col_sel_3:
             selected_1st = st.multiselect(
                 "Filter: 1st vendor",
                 options=all_1st,
@@ -1060,7 +1389,7 @@ def page():
                 placeholder="Choose vendors",
                 key="filter_1st_scope"
             )
-        with col_sel_3:
+        with col_sel_4:
             selected_2nd = st.multiselect(
                 "Filter: 2nd vendor",
                 options=all_2nd,
@@ -1074,6 +1403,9 @@ def page():
 
         if selected_scope:
             df_filtered_scope = df_filtered_scope[df_filtered_scope["SCOPE"].isin(selected_scope)]
+
+        if selected_region:
+            df_filtered_scope = df_filtered_scope[df_filtered_scope["REGION"].isin(selected_region)]
 
         if selected_1st:
             df_filtered_scope = df_filtered_scope[df_filtered_scope["1st Vendor"].isin(selected_1st)]
@@ -1109,3 +1441,310 @@ def page():
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 icon=":material/download:",
             )
+
+    # VISUALIZATIONN
+    tab2.markdown("##### 📊 Visualization")
+
+    with tab2:
+        subtab1, subtab2 = st.tabs(["Win Rate Trend", "Average Gap Trend"])
+
+        with subtab1:
+            # --- WIN RATE VISUALIZATION ---
+            # --- Hitung total kemenangan (1st & 2nd Vendor)
+            win1_counts = df_all_scopes["1st Vendor"].value_counts(dropna=True).reset_index()
+            win1_counts.columns = ["Vendor", "Wins1"]
+
+            win2_counts = df_all_scopes["2nd Vendor"].value_counts(dropna=True).reset_index()
+            win2_counts.columns = ["Vendor", "Wins2"]
+
+            # --- Hitung total partisipasi vendor ---
+            vendor_counts = (
+                df_all_scopes[vendor_cols]
+                .notna()       # True kalau vendor berpartisipasi (ada harga)
+                .sum()         # Hitung True per kolom
+                .reset_index()
+            )
+            vendor_counts.columns = ["Vendor", "Total Participations"]
+
+            # --- Gabungkan semua ---
+            win_rate = (
+                vendor_counts
+                .merge(win1_counts, on="Vendor", how="left")
+                .merge(win2_counts, on="Vendor", how="left")
+                .fillna(0)
+            )
+
+            # --- Hitung Win Rate (%)
+            win_rate["1st Win Rate (%)"] = np.where(
+                win_rate["Total Participations"] > 0,
+                (win_rate["Wins1"] / win_rate["Total Participations"] * 100).round(1),
+                0
+            )
+            win_rate["2nd Win Rate (%)"] = np.where(
+                win_rate["Total Participations"] > 0,
+                (win_rate["Wins2"] / win_rate["Total Participations"] * 100).round(1),
+                0
+            )
+
+            # --- Siapkan data long-format untuk visualisasi ---
+            win_rate_long = win_rate.melt(
+                id_vars=["Vendor"],
+                value_vars=["1st Win Rate (%)", "2nd Win Rate (%)"],
+                var_name="Metric",
+                value_name="Percentage"
+            )
+
+            # --- Urutkan vendor berdasarkan 1st Win Rate tertinggi ---
+            vendor_order = (
+                win_rate.sort_values("1st Win Rate (%)", ascending=False)["Vendor"].tolist()
+            )
+
+            # --- Tentukan warna untuk kedua metrik ---
+            metric_colors = {
+                "1st Win Rate (%)": "#1f77b4",
+                "2nd Win Rate (%)": "#ff7f0e"     # biru
+            }
+
+            # --- Highlight interaktif ---
+            highlight = alt.selection_point(on='mouseover', fields=['Metric'], nearest=True)
+
+            # --- Batas atas dan bawah sumbu Y ---
+            y_max = win_rate_long["Percentage"].max()
+            if not np.isfinite(y_max) or y_max <= 0:
+                y_max = 1
+
+            # Pastikan data diurutkan sesuai vendor_order
+            win_rate_long["Vendor"] = pd.Categorical(win_rate_long["Vendor"], categories=vendor_order, ordered=True)
+            win_rate_long = win_rate_long.sort_values(["Metric", "Vendor"])
+
+            # --- Chart utama ---
+            base = (
+                alt.Chart(win_rate_long)
+                .encode(
+                    x=alt.X("Vendor:N", sort=vendor_order, title=None),
+                    y=alt.Y(
+                        "Percentage:Q",
+                        title="Win Rate (%)",
+                        scale=alt.Scale(domain=[0, y_max * 1.2])
+                    ),
+                    color=alt.Color(
+                        "Metric:N",
+                        scale=alt.Scale(
+                            domain=list(metric_colors.keys()),
+                            range=list(metric_colors.values())
+                        ),
+                        title="Rank"
+                    ),
+                    tooltip=[
+                        alt.Tooltip("Vendor:N", title="Vendor"),
+                        alt.Tooltip("Metric:N", title="Position"),
+                        alt.Tooltip("Percentage:Q", title="Win Rate (%)", format=".1f")
+                    ]
+                )
+            )
+
+            # --- Garis dengan titik ---
+            lines = base.mark_line(point=alt.OverlayMarkDef(size=70, filled=True), strokeWidth=3)
+
+            # --- Label persentase di atas titik ---
+            labels = base.mark_text(
+                align='center',
+                baseline='bottom',
+                dy=-7,
+                fontWeight='bold',
+                color='gray'
+            ).encode(
+                text=alt.Text("Percentage:Q", format=".1f")
+            ).transform_calculate(
+                label="format(datum.Percentage, '.1f') + '%'"
+            ).encode(
+                text="label:N"
+            )
+
+            # --- Gabungkan semua elemen ---
+            chart = (
+                lines + labels
+            ).properties(
+                height=400,
+                padding={"right": 15},
+                title="Vendor Win Rate Comparison (1st vs 2nd Place)"
+            ).configure_title(
+                anchor="middle",
+                offset=12,
+                fontSize=14
+            ).configure_axis(
+                labelFontSize=12,
+                titleFontSize=13
+            ).configure_view(
+                stroke='gray',
+                strokeWidth=1
+            ).configure_legend(
+                titleFontSize=12,
+                titleFontWeight="bold",
+                labelFontSize=12,
+                labelLimit=300,
+                orient="bottom"
+            )
+
+            st.write("")
+            # --- Tampilkan chart di Streamlit
+            st.altair_chart(chart)
+
+            # Kolom yang mau ditaruh di depan
+            cols_front = ["Wins1", "Wins2"]
+
+            # Sisanya (Vendor + kolom lain yang tidak ada di cols_front)
+            cols_rest = [c for c in win_rate.columns if c not in cols_front]
+
+            # Gabungkan urutannya
+            win_rate = win_rate[cols_rest[:1] + cols_front + cols_rest[1:]]
+
+            # --- Ganti nama kolom biar lebih konsisten & enak dibaca
+            df_summary = win_rate.rename(columns={
+                "Wins1": "1st Rank",
+                "Wins2": "2nd Rank"
+            })
+
+            with st.expander("See explanation"):
+                st.write('''
+                    The visualization above compares the win rate of each vendor
+                    based on how often they achieved 1st or 2nd place in all
+                    tender evaluations.  
+                            
+                    **💡 How to interpret the chart**  
+                            
+                    - High 1st Win Rate (%)  
+                        Vendor is highly competitive and often offers the best commercial terms.  
+                    - High 2nd Win Rate (%)  
+                        Vendor consistently performs well, often just slightly less competitive than the winner.  
+                    - Large Gap Between 1st & 2nd Win Rate  
+                        Shows clear market dominance by certain vendors.
+                ''')
+                st.dataframe(df_summary, hide_index=True)
+
+                # Simpan hasil ke variabel
+                excel_data = get_excel_download(df_summary, sheet_name="Win Rate Trend Summary")
+
+                # Layout tombol (rata kanan)
+                col1, col2, col3 = st.columns([3,1,1])
+                with col3:
+                    st.download_button(
+                        label="Download",
+                        data=excel_data,
+                        file_name="Win Rate Trend Summary.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        icon=":material/download:",
+                        key="download_Win_Rate_Trend_Tab2"
+                    )
+
+        with subtab2:
+            # --- AVERAGE GAP VISUALIZATION ---
+            # --- Hitung rata-rata Gap 1 to 2 (%) per Vendor (hanya untuk 1st Vendor)
+            df_gap = df_all_scopes.copy()
+
+            # Ubah kolom 'Gap 1 to 2 (%)' ke numerik (hapus simbol %)
+            df_gap["Gap 1 to 2 (%)"] = (
+                df_gap["Gap 1 to 2 (%)"]
+                .replace("%", "", regex=True)
+                .astype(float)
+            )
+
+            # Hitung rata-rata gap per vendor (hanya vendor yang jadi 1st Lowest)
+            avg_gap = (
+                df_gap.groupby("1st Vendor", dropna=True)["Gap 1 to 2 (%)"]
+                .mean()
+                .reset_index()
+                .rename(columns={"1st Vendor": "Vendor", "Gap 1 to 2 (%)": "Average Gap (%)"})
+                .sort_values("Average Gap (%)", ascending=False)
+            )
+
+            # st.dataframe(avg_gap)
+
+            # Warna per vendor (biar konsisten kalau kamu sudah punya color mapping)
+            colors_list = ["#F94144", "#F3722C", "#F8961E", "#F9C74F", "#90BE6D",
+                        "#43AA8B", "#577590", "#E54787", "#BF219A", "#8E0F9C", "#4B1D91"]
+            vendor_colors = {v: c for v, c in zip(avg_gap["Vendor"].unique(), colors_list)}
+
+            # Interaksi hover
+            highlight = alt.selection_point(on='mouseover', fields=['Vendor'], nearest=True)
+
+            # --- Chart utama ---
+            bars = (
+                alt.Chart(avg_gap)
+                .mark_bar()
+                .encode(
+                    x=alt.X("Vendor:N", sort='-y', title=None),
+                    y=alt.Y("Average Gap (%):Q", title="Average Gap (%)", scale=alt.Scale(domain=[0, avg_gap["Average Gap (%)"].max() * 1.2])),
+                    color=alt.Color("Vendor:N",
+                                    scale=alt.Scale(domain=list(vendor_colors.keys()), range=list(vendor_colors.values())),
+                                    legend=None),
+                    tooltip=[
+                        alt.Tooltip("Vendor:N", title="Vendor"),
+                        alt.Tooltip("Average Gap (%):Q", title="Average Gap (%)", format=".1f")
+                    ]
+                )
+                .add_params(highlight)
+            )
+
+            # Label teks di atas bar
+            labels = (
+                alt.Chart(avg_gap)
+                .mark_text(dy=-7, fontWeight='bold', color='gray')
+                .encode(
+                    x="Vendor:N",
+                    y="Average Gap (%):Q",
+                    text=alt.Text("Average Gap (%):Q", format=".1f")  # Format angka
+                )
+                .transform_calculate(  # Tambahkan simbol %
+                    label_text="format(datum['Average Gap (%)'], '.1f') + '%'"
+                )
+                .encode(
+                    text="label_text:N"
+                )
+            )
+
+            # Frame luar untuk gaya rapi
+            frame = alt.Chart().mark_rect(stroke='gray', strokeWidth=1, fillOpacity=0)
+
+            avg_line = alt.Chart(avg_gap).mark_rule(color='gray', strokeDash=[4,2], size=1.75).encode(
+                y='mean(Average Gap (%)):Q'
+            )
+
+            # Gabungkan semua elemen
+            chart = (bars + labels + frame + avg_line).properties(
+                title="Average Gap (%) per 1st Vendor",
+                height=400
+            ).configure_title(
+                anchor='middle',
+                offset=12,
+                fontSize=14
+            ).configure_axis(
+                labelFontSize=12,
+                titleFontSize=13
+            ).configure_view(
+                stroke='gray',
+                strokeWidth=1
+            )
+
+            st.write("")
+            # --- Tampilkan di Streamlit ---
+            st.altair_chart(chart)
+
+            avg_value = avg_gap["Average Gap (%)"].mean()
+
+            # with st:
+            with st.expander("See explanation"):
+                st.write(f'''
+                    The chart above shows the average price difference between 
+                    the lowest and second-lowest bids for each vendor when they 
+                    rank 1st, indicating their pricing dominance or competitiveness.
+                            
+                    **💡 How to interpret the chart**  
+                            
+                    - High Gap  
+                        High gap indicates strong vendor dominance (much lower prices).  
+                    - Low Gap  
+                        Low gap indicates intense competition with similar pricing among vendors.  
+                    
+                    The dashed line represents the average gap across all vendors, serving as a benchmark ({avg_value:.1f}%).
+                ''')
