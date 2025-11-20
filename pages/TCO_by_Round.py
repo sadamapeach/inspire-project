@@ -65,6 +65,18 @@ def get_excel_download(df, sheet_name="Sheet1"):
         workbook = writer.book
         worksheet = writer.sheets[sheet_name]
 
+        # Format header columns
+        header_format = workbook.add_format({
+            "bold": True,
+            "text_wrap": True,
+            "align": "center",
+            "valign": "vcenter"
+        })
+
+        # Terapkan format ke setiap header kolom
+        for col_num, value in enumerate(df.columns):
+            worksheet.write(0, col_num, value, header_format)
+
         # --- Format untuk baris TOTAL ---
         bold_format = workbook.add_format({'bold': True})
 
@@ -97,12 +109,38 @@ def get_excel_download_highlight_total(df, sheet_name="Sheet1"):
         workbook = writer.book
         worksheet = writer.sheets[sheet_name]
 
+        # Format header columns
+        header_format = workbook.add_format({
+            "bold": True,
+            "text_wrap": True,
+            "align": "center",
+            "valign": "vcenter"
+        })
+
+        # Terapkan format ke setiap header kolom
+        for col_num, value in enumerate(df.columns):
+            worksheet.write(0, col_num, value, header_format)
+
         # Tentukan format
+        format_rupiah_xls = workbook.add_format({'num_format': '#,##0'})
+        format_pct     = workbook.add_format({'num_format': '0.0"%"'})
         highlight_format = workbook.add_format({
             "bold": True,
             "bg_color": "#D9EAD3",  # hijau lembut
-            "font_color": "#1A5E20"  # hijau tua
+            "font_color": "#1A5E20",  # hijau tua
+            "num_format": "#,##0"
         })
+
+        # Terapkan format
+        for col_num, col_name in enumerate(df.columns):
+            if col_name in df.select_dtypes(include=["number"]).columns:
+                worksheet.set_column(col_num, col_num, 15, format_rupiah_xls)
+
+            if "PRICE REDUCTION (VALUE)" in col_name or "STANDARD DEVIATION" in col_name:
+                worksheet.set_column(col_num, col_num, 15, format_rupiah_xls)
+
+            if "PRICE REDUCTION (%)" in col_name or "PRICE STABILITY INDEX (%)" in col_name:
+                worksheet.set_column(col_num, col_num, 15, format_pct)
 
         # Jumlah kolom data
         num_cols = len(df.columns)
@@ -119,14 +157,40 @@ def get_excel_download_highlight_total(df, sheet_name="Sheet1"):
 # Download Highlight 1st & 2nd Vendors
 def get_excel_download_highlight_1st_2nd_lowest(df, sheet_name="Sheet1"):
     output = BytesIO()
+
+    # Buat file Excel dengan XlsxWriter
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
         df.to_excel(writer, index=False, sheet_name=sheet_name)
         workbook = writer.book
         worksheet = writer.sheets[sheet_name]
 
+        # Format header columns
+        header_format = workbook.add_format({
+            "bold": True,
+            "text_wrap": True,
+            "align": "center",
+            "valign": "vcenter"
+        })
+
+        # Terapkan format ke setiap header kolom
+        for col_num, value in enumerate(df.columns):
+            worksheet.write(0, col_num, value, header_format)
+
+        # Tentukan format
+        format_rupiah_xls = workbook.add_format({'num_format': '#,##0'})
+        format_pct     = workbook.add_format({'num_format': '0.0"%"'})
+
+        # Terapkan format
+        for col_num, col_name in enumerate(df.columns):
+            if col_name in df.select_dtypes(include=["number"]).columns:
+                worksheet.set_column(col_num, col_num, 15, format_rupiah_xls)
+
+            if "%" in col_name:
+                worksheet.set_column(col_num, col_num, 15, format_pct)
+
         # --- Format umum ---
-        format_first = workbook.add_format({'bg_color': '#C6EFCE'})  # hijau Excel-style
-        format_second = workbook.add_format({'bg_color': '#FFEB9C'}) # kuning Excel-style
+        format_first = workbook.add_format({'bg_color': '#C6EFCE', "num_format": "#,##0"})  # hijau Excel-style
+        format_second = workbook.add_format({'bg_color': '#FFEB9C', "num_format": "#,##0"}) # kuning Excel-style
 
         # --- Loop baris dan kolom ---
         for row_idx, (_, row) in enumerate(df.iterrows(), start=1):
@@ -219,7 +283,6 @@ def page():
     
     # Proses upload hanya sekali per set file
     if "already_processed_tco_by_round" not in st.session_state:
-        all_rounds = []
         # --- Animasi proses upload ---
         msg = st.toast("📂 Uploading file...")
         time.sleep(1.2)
@@ -230,6 +293,7 @@ def page():
         msg.toast("✅ File uploaded successfully!")
         time.sleep(0.5)
 
+    all_rounds = []
     for file in files_to_process:
         # STEP 1: ambil nama file sebagai ROUND
         filename = os.path.splitext(file.name)[0]
@@ -626,7 +690,7 @@ def page():
         first_val = valid_prices.iloc[0]
         last_val  = valid_prices.iloc[-1]
 
-        reduction_value = last_val - first_val
+        reduction_value = first_val - last_val
         reduction_pct   = (reduction_value / first_val) * 100
 
         return pd.Series({
@@ -757,7 +821,6 @@ def page():
 
     # Download
     excel_data = get_excel_download_highlight_total(df_export)
-    # excel_data = get_excel_download(df_filter_pivot)
     col1, col2, col3 = st.columns([2.3,2,1])
     with col3:
         st.download_button(

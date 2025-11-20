@@ -279,7 +279,6 @@ def page():
 
     # Proses upload hanya sekali per set file
     if "already_processed_upl_round_by_round" not in st.session_state:
-        all_rounds = []
         # --- Animasi proses upload ---
         msg = st.toast("📂 Uploading files...")
         time.sleep(1.2)
@@ -290,7 +289,8 @@ def page():
         msg.toast("✅ File uploaded successfully!")
         time.sleep(0.5)
 
-    for file in upload_files:
+    all_rounds = []
+    for file in files_to_process:
         # STEP 1: ambil nama file sebagai ROUND
         filename = os.path.splitext(file.name)[0]   # contoh: "L2R1"
 
@@ -350,7 +350,7 @@ def page():
 
     # Merge Data
     st.markdown("##### 🗃️ Merge Data")
-    st.caption(f"Successfully consolidated data from **{len(upload_files)} files**.")
+    st.caption(f"Successfully consolidated data from **{len(files_to_process)} files**.")
 
     # Pembulatan
     num_cols = final_df.select_dtypes(include=["number"]).columns
