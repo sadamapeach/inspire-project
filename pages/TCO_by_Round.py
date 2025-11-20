@@ -390,6 +390,80 @@ def page():
 
     st.divider()
 
+    # PIVOTT TABLEE
+    st.markdown("##### 🛸 Pivot Table")
+
+    total = df_final.columns[1]
+    df_ptable = df_final[df_final[total] != "TOTAL"].copy()
+
+    non_round_cols = [c for c in df_ptable.columns if c != "ROUND"]
+    scope_cols = df_ptable[non_round_cols].select_dtypes(exclude=["number"]).columns.tolist()
+    vendor_cols = df_ptable[non_round_cols].select_dtypes(include=["number"]).columns.tolist()
+
+    # Ubah ke long format
+    df_plong = df_ptable.melt(
+        id_vars=["ROUND"] + scope_cols,
+        value_vars=vendor_cols,
+        var_name="VENDOR",
+        value_name="PRICE"
+    )
+
+    # Pivot
+    df_ppivot = df_plong.pivot_table(
+        index=scope_cols,
+        columns=["VENDOR", "ROUND"],
+        values="PRICE",
+        aggfunc="first"
+    )
+
+    # Rapikan nama kolom (flatten)
+    df_ppivot.columns = [
+        f"{vendor} {round_}"
+        for vendor, round_ in df_ppivot.columns
+    ]
+
+    df_ppivot = df_ppivot.reset_index() # reset index
+
+    # Tambahkan row TOTAL
+    total_row = {col: "" for col in df_ppivot.columns}
+
+    first_scope_col = scope_cols[0]
+    total_row[first_scope_col] = "TOTAL"
+
+    for col in df_ppivot.columns:
+        if col not in scope_cols:
+            total_row[col] = df_ppivot[col].sum(numeric_only=True)
+
+    # Append row TOTAL
+    df_ppivot = pd.concat([df_ppivot, pd.DataFrame([total_row])], ignore_index=True)
+
+    # Format
+    num_cols = df_ppivot.select_dtypes(include=["number"]).columns
+
+    df_ppivot_styled = (
+        df_ppivot.style
+        .format({col: format_rupiah for col in num_cols})
+        .apply(highlight_total_row_v2, axis=1)
+    )
+
+    # Tampilkan
+    st.session_state["pivot2_tco_by_round"] = df_ppivot
+    st.dataframe(df_ppivot_styled, hide_index=True)
+
+    # Download
+    excel_data = get_excel_download_highlight_total(df_ppivot)
+    col1, col2, col3 = st.columns([2.3,2,1])
+    with col3:
+        st.download_button(
+            label="Download",
+            data=excel_data,
+            file_name="Pivot Table TCO by Round.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            icon=":material/download:",
+        )
+
+    st.divider()
+
     # BIDD & PRICEE ANALYSIS
     st.markdown("##### 🧠 Bid & Price Analysis")
 

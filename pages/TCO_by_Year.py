@@ -58,7 +58,7 @@ def highlight_1st_2nd_vendor(row, columns):
     
 # Download button to Excel
 @st.cache_data
-def get_excel_download(df, sheet_name="Your_file_name"):
+def get_excel_download(df, sheet_name="Sheet1"):
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name=sheet_name)
@@ -117,7 +117,7 @@ def get_excel_download_highlight_total(df, sheet_name="Sheet1"):
     return output.getvalue()
 
 # Download Highlight 1st & 2nd Vendors
-def get_excel_download_highlight_1st_2nd_lowest(df, sheet_name="Your_file_name"):
+def get_excel_download_highlight_1st_2nd_lowest(df, sheet_name="Sheet1"):
     output = BytesIO()
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
         df.to_excel(writer, index=False, sheet_name=sheet_name)
