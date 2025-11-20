@@ -234,9 +234,21 @@ def page():
         df_clean.columns = df_clean.columns.map(str)
         df_clean.index = df_clean.index.map(str)
 
-        # Tambah kolom total
-        if "TOTAL" not in df_clean.columns:
+        # Deteksi kolom yang mengandung "total" (case-insensitive)
+        total_cols = [col for col in df_clean.columns if "total" in col.lower()]
+
+        if len(total_cols) == 0:
+            # Jika tidak ada kolom total -> buat baru
             df_clean["TOTAL"] = df_clean.sum(axis=1, numeric_only=True)
+
+        else:
+            # Jika sudah ada -> rename hanya kolom pertama yg cocok
+            first_total_col = total_cols[0]
+            df_clean = df_clean.rename(columns={first_total_col: "TOTAL"})
+
+        # # Tambah kolom total
+        # if "TOTAL" not in df_clean.columns:
+        #     df_clean["TOTAL"] = df_clean.sum(axis=1, numeric_only=True)
 
         # Pembulatan
         num_cols = df_clean.select_dtypes(include=["number"]).columns
