@@ -206,18 +206,20 @@ def page():
 
         return df_clean
 
+    # Kalau ada upload baru → overwrite & reset flag
     if upload_files:
         st.session_state["upload_multi_file_tco_by_round"] = upload_files
-        files_to_process = upload_files
-    
-    elif "upload_multi_file_tco_by_round" in st.session_state:
-        files_to_process = st.session_state["upload_multi_file_tco_by_round"]
+        st.session_state.pop("already_processed_tco_by_round", None)
 
-    else:
+    # Kalau belum ada file yang tersimpan → stop
+    if "upload_multi_file_tco_by_round" not in st.session_state:
         st.stop()
+
+    files_to_process = st.session_state["upload_multi_file_tco_by_round"]
     
-    all_rounds = []
+    # Proses upload hanya sekali per set file
     if "already_processed_tco_by_round" not in st.session_state:
+        all_rounds = []
         # --- Animasi proses upload ---
         msg = st.toast("📂 Uploading file...")
         time.sleep(1.2)
@@ -272,7 +274,7 @@ def page():
 
     # Simpan ke session
     st.session_state["merge_tco_by_round"] = df_final
-    st.session_state["already_processed_tco_by_round"] = True
+    # st.session_state["already_processed_tco_by_round"] = True
 
     st.divider()
    

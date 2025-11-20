@@ -265,19 +265,21 @@ def page():
         df_clean.index = df_clean.index.map(str)
 
         return df_clean
-    
-    # Simpan file ke session
+
+    # Kalau ada upload baru → overwrite & reset flag
     if upload_files:
         st.session_state["upload_multi_file_upl_round_by_round"] = upload_files
-    
-    elif "upload_multi_file_upl_round_by_round" in st.session_state:
-        upload_files = st.session_state["upload_multi_file_upl_round_by_round"]
+        st.session_state.pop("already_processed_upl_round_by_round", None)
 
-    else:
-        st.stop() 
-    
-    all_rounds = []
+    # Kalau belum ada file yang tersimpan → stop
+    if "upload_multi_file_upl_round_by_round" not in st.session_state:
+        st.stop()
+
+    files_to_process = st.session_state["upload_multi_file_upl_round_by_round"]
+
+    # Proses upload hanya sekali per set file
     if "already_processed_upl_round_by_round" not in st.session_state:
+        all_rounds = []
         # --- Animasi proses upload ---
         msg = st.toast("📂 Uploading files...")
         time.sleep(1.2)

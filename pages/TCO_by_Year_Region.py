@@ -648,9 +648,7 @@ def page():
     st.markdown("##### 🧠 Bid & Price Analysis")
 
     # --- DROP baris TOTAL ---
-    df_clean = df_all_vendors[
-        ~df_all_vendors["SCOPE"].astype(str).str.upper().eq("TOTAL")
-    ].copy()
+    df_clean = df_all_vendors.copy()
 
     # --- Ubah dari format wide (Region1, Region2, dst) ke long ---
     df_melted = df_clean.melt(
@@ -711,40 +709,67 @@ def page():
 
     df_summary = df_pivot[summary_cols]
 
-    # --- 🎯 Tambahkan dua slicer terpisah untuk 1st Vendor dan 2nd Vendor
+    df_summary = df_summary[
+        ~df_summary.apply(
+            lambda row: row.astype(str).str.upper().eq("TOTAL").any(),
+            axis=1
+        )
+    ].copy()
+
+    # --- 🎯 Tambahkan slicer
+    all_year = sorted(df_summary["YEAR"].dropna().unique())
+    all_region = sorted(df_summary["REGION"].dropna().unique())
     all_1st = sorted(df_summary["1st Vendor"].dropna().unique())
     all_2nd = sorted(df_summary["2nd Vendor"].dropna().unique())
 
-    col_sel_1, col_sel_2 = st.columns(2)
+    col_sel_1, col_sel_2, col_sel_3, col_sel_4 = st.columns(4)
     with col_sel_1:
+        selected_year = st.multiselect(
+            "Filter: Year",
+            options=all_year,
+            default=None,
+            placeholder="Choose years",
+            key="filter_year"
+        )
+    with col_sel_2:
+        selected_region = st.multiselect(
+            "Filter: Region",
+            options=all_region,
+            default=None,
+            placeholder="Choose region",
+            key="filter_region"
+        )
+    with col_sel_3:
         selected_1st = st.multiselect(
             "Filter: 1st vendor",
             options=all_1st,
             default=None,
-            placeholder="Choose one or more vendors",
-            key=f"filter_1st_vendor"
+            placeholder="Choose vendors",
+            key="filter_1st_vendor"
         )
-    with col_sel_2:
+    with col_sel_4:
         selected_2nd = st.multiselect(
             "Filter: 2nd vendor",
             options=all_2nd,
             default=None,
-            placeholder="Choose one or more vendors",
-            key=f"filter_2nd_vendor"
+            placeholder="Choose vendors",
+            key="filter_2nd_vendor"
         )
 
-    # --- Terapkan filter dengan logika AND
-    if selected_1st and selected_2nd:
-        df_filtered = df_summary[
-            df_summary["1st Vendor"].isin(selected_1st) &
-            df_summary["2nd Vendor"].isin(selected_2nd)
-        ]
-    elif selected_1st:
-        df_filtered = df_summary[df_summary["1st Vendor"].isin(selected_1st)]
-    elif selected_2nd:
-        df_filtered = df_summary[df_summary["2nd Vendor"].isin(selected_2nd)]
-    else:
-        df_filtered = df_summary.copy()
+    # --- Terapkan filter AND secara dinamis
+    df_filtered = df_summary.copy()
+
+    if selected_year:
+        df_filtered = df_filtered[df_filtered["YEAR"].isin(selected_year)]
+
+    if selected_region:
+        df_filtered = df_filtered[df_filtered["REGION"].isin(selected_region)]
+
+    if selected_1st:
+        df_filtered = df_filtered[df_filtered["1st Vendor"].isin(selected_1st)]
+
+    if selected_2nd:
+        df_filtered = df_filtered[df_filtered["2nd Vendor"].isin(selected_2nd)]
 
     # --- Format rupiah & persentase hanya untuk df_filtered
     num_cols = df_filtered.select_dtypes(include=["number"]).columns

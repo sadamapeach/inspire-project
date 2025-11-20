@@ -576,13 +576,32 @@ def page():
     # --- Gabungkan semua region jadi satu DataFrame besar ---
     df_all_regions = pd.concat(all_regions_combined, ignore_index=True)
 
+    scope = df_all_regions.columns[1]
     # --- 🎯 Tambahkan slicer
+    all_region = sorted(df_all_regions["REGION"].dropna().unique())
+    all_scope = sorted(df_all_regions[scope].dropna().unique())
     all_1st = sorted(df_all_regions["1st Vendor"].dropna().unique())
     all_2nd = sorted(df_all_regions["2nd Vendor"].dropna().unique())
 
     with tab1:
-        col_sel_1, col_sel_2 = st.columns(2)
+        col_sel_1, col_sel_2, col_sel_3, col_sel_4 = st.columns(4)
         with col_sel_1:
+            selected_region = st.multiselect(
+                "Filter: Region",
+                options=all_region,
+                default=[],
+                placeholder="Choose regions",
+                key="filter_region_2"
+            )
+        with col_sel_2:
+            selected_scope = st.multiselect(
+                "Filter: Scope",
+                options=all_scope,
+                default=[],
+                placeholder="Choose scopes",
+                key="filter_scope_2"
+            )
+        with col_sel_3:
             selected_1st = st.multiselect(
                 "Filter: 1st vendor",
                 options=all_1st,
@@ -590,7 +609,7 @@ def page():
                 placeholder="Choose vendors",
                 key="filter_1st_region"
             )
-        with col_sel_2:
+        with col_sel_4:
             selected_2nd = st.multiselect(
                 "Filter: 2nd vendor",
                 options=all_2nd,
@@ -601,6 +620,12 @@ def page():
 
         # --- Terapkan filter AND secara dinamis
         df_filtered_region = df_all_regions.copy()
+
+        if selected_region:
+            df_filtered_region = df_filtered_region[df_filtered_region["REGION"].isin(selected_region)]
+
+        if selected_scope:
+            df_filtered_region = df_filtered_region[df_filtered_region[scope].isin(selected_scope)]
 
         if selected_1st:
             df_filtered_region = df_filtered_region[df_filtered_region["1st Vendor"].isin(selected_1st)]
@@ -1333,12 +1358,30 @@ def page():
     df_all_scopes = pd.concat(all_scopes_combined, ignore_index=True)
 
     # --- 🎯 Tambahkan slicer
+    all_scope = sorted(df_all_scopes["SCOPE"].dropna().unique())
+    all_region = sorted(df_all_scopes["REGION"].dropna().unique())
     all_1st = sorted(df_all_scopes["1st Vendor"].dropna().unique())
     all_2nd = sorted(df_all_scopes["2nd Vendor"].dropna().unique())
 
     with tab2:
-        col_sel_1, col_sel_2 = st.columns(2)
+        col_sel_1, col_sel_2, col_sel_3, col_sel_4 = st.columns(4)
         with col_sel_1:
+            selected_scope = st.multiselect(
+                "Filter: Scope",
+                options=all_scope,
+                default=[],
+                placeholder="Choose scopes",
+                key="filter_scope_1"
+            )
+        with col_sel_2:
+            selected_region = st.multiselect(
+                "Filter: Region",
+                options=all_region,
+                default=[],
+                placeholder="Choose regions",
+                key="filter_region_1"
+            )
+        with col_sel_3:
             selected_1st = st.multiselect(
                 "Filter: 1st vendor",
                 options=all_1st,
@@ -1346,7 +1389,7 @@ def page():
                 placeholder="Choose vendors",
                 key="filter_1st_scope"
             )
-        with col_sel_2:
+        with col_sel_4:
             selected_2nd = st.multiselect(
                 "Filter: 2nd vendor",
                 options=all_2nd,
@@ -1357,6 +1400,12 @@ def page():
 
         # --- Terapkan filter AND secara dinamis
         df_filtered_scope = df_all_scopes.copy()
+
+        if selected_scope:
+            df_filtered_scope = df_filtered_scope[df_filtered_scope["SCOPE"].isin(selected_scope)]
+
+        if selected_region:
+            df_filtered_scope = df_filtered_scope[df_filtered_scope["REGION"].isin(selected_region)]
 
         if selected_1st:
             df_filtered_scope = df_filtered_scope[df_filtered_scope["1st Vendor"].isin(selected_1st)]
