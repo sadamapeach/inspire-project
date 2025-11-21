@@ -1099,6 +1099,7 @@ def page():
             )
     )
 
+
     tab2.write("")
     tab2.altair_chart(trend_chart)
 

@@ -441,22 +441,22 @@ def page():
     # Gabungkan semua round
     df_summary = pd.concat(all_rounds_list, ignore_index=True)
 
-    # TOTAL BESARR
-    total_all_row = {col: "" for col in df_summary.columns}
-    total_all_row["ROUND"] = "TOTAL"
-    total_all_row[scope_cols[0]] = "TOTAL"
+    # # TOTAL BESARR
+    # total_all_row = {col: "" for col in df_summary.columns}
+    # total_all_row["ROUND"] = "TOTAL"
+    # total_all_row[scope_cols[0]] = "TOTAL"
 
-    # for v in df_summary.columns:
-    #     if v not in ["ROUND", *scope_cols]:
-    #         total_all_row[v] = df_summary[df_summary[scope_cols[0]] == "TOTAL"][v].sum()
+    # # for v in df_summary.columns:
+    # #     if v not in ["ROUND", *scope_cols]:
+    # #         total_all_row[v] = df_summary[df_summary[scope_cols[0]] == "TOTAL"][v].sum()
 
-    num_cols_all = df_summary.select_dtypes(include="number").columns
-    total_mask = df_summary[df_summary[scope_cols[0]] == "TOTAL"]
+    # num_cols_all = df_summary.select_dtypes(include="number").columns
+    # total_mask = df_summary[df_summary[scope_cols[0]] == "TOTAL"]
 
-    for c in num_cols_all:
-        total_all_row[c] = total_mask[c].sum()
+    # for c in num_cols_all:
+    #     total_all_row[c] = total_mask[c].sum()
 
-    df_summary = pd.concat([df_summary, pd.DataFrame([total_all_row])], ignore_index=True)
+    # df_summary = pd.concat([df_summary, pd.DataFrame([total_all_row])], ignore_index=True)
 
     # Simpan dan tampilkan
     st.session_state["upl_comparison_round_by_round_pivot"] = df_summary
@@ -465,14 +465,13 @@ def page():
     df_pivot_style = (
         df_summary.style
             .format({col: format_rupiah for col in num_cols})
-            .apply(highlight_total_per_round, axis=1)
-            .apply(highlight_total_all_round, axis=1)
+            .apply(highlight_total_row_v2, axis=1)
     )
 
     st.dataframe(df_pivot_style, hide_index=True)
 
     # Download button to Excel
-    excel_data = get_excel_download_with_highlight_round(df_summary)
+    excel_data = get_excel_download_highlight_total(df_summary)
     # Pastikan berada di tab atau st
     col1, col2, col3 = st.columns([2.3,2,1])
     with col3:
@@ -740,6 +739,34 @@ def page():
     # Hapus helper column
     df_pivot = df_pivot.drop(columns=["SCOPE_KEY"])
 
+    # Adding "TOTAL" columns
+    round_cols = round_order.copy()
+
+    total_rows = []
+    for vendor in df_pivot["VENDOR"].unique():
+        df_vendor = df_pivot[df_pivot["VENDOR"] == vendor]
+
+        # Hitung sum per ROUND
+        total_data = df_vendor[round_cols].sum(numeric_only=True)
+
+        # Buat row kosong
+        total_row = {col: np.nan for col in df_pivot.columns}
+
+        total_row["VENDOR"] = vendor
+        total_row[scope_cols[0]] = "TOTAL"
+
+        # Masukkan total ROUND
+        for col in round_cols:
+            total_row[col] = total_data[col]
+
+        total_rows.append(total_row)
+
+    df_total_rows = pd.DataFrame(total_rows)
+    df_pivot = pd.concat([df_pivot, df_total_rows], ignore_index=True)
+
+    # Urutkan lagi: vendor tetap grouping
+    df_pivot = df_pivot.sort_values(["VENDOR", scope_cols[0]], key=lambda s: s.replace("TOTAL", "ZZZ"))
+
     # Tambahkan slicer 
     all_vendor = sorted(df_pivot[vendor_col].dropna().unique())
     all_trend  = sorted(df_pivot["PRICE TREND"].dropna().unique())
@@ -786,14 +813,21 @@ def page():
     df_pivot_style = (
         df_filter_pivot.style
         .format(format_dict)
+        .apply(highlight_total_row_v2, axis=1)
     )
 
     # Tampilkan
     st.caption(f"✨ Total number of data entries: **{len(df_filter_pivot)}**")
     st.dataframe(df_pivot_style, hide_index=True)
 
+    # --- Prepare dataframe for Excel export ---
+    df_export = df_filter_pivot.copy()
+
+    # Replace NaN / Inf with empty string to avoid xlsxwriter error
+    df_export = df_export.replace([np.nan, np.inf, -np.inf], "")
+
     # Simpan hasil ke variabel
-    excel_data = get_excel_download(df_filter_pivot)
+    excel_data = get_excel_download_highlight_total(df_export)
 
     # Layout tombol (rata kanan)
     col1, col2, col3 = st.columns([2.3,2,1])
@@ -1039,7 +1073,7 @@ def page():
                 dy=-7,                # geser sedikit ke atas
                 fontSize=10,
                 fontWeight="bold",
-                color="gray",
+                color="gray"
             )
             .encode(
                 x=alt.X(
