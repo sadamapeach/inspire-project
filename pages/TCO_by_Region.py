@@ -98,11 +98,19 @@ def get_excel_download_highlight_total(df, sheet_name="Sheet1"):
         worksheet = writer.sheets[sheet_name]
 
         # Tentukan format
+        format_rupiah_xls = workbook.add_format({'num_format': '#,##0'})
+        format_pct     = workbook.add_format({'num_format': '0.0"%"'})
         highlight_format = workbook.add_format({
             "bold": True,
             "bg_color": "#D9EAD3",  # hijau lembut
-            "font_color": "#1A5E20"  # hijau tua
+            "font_color": "#1A5E20",  # hijau tua
+            "num_format": "#,##0"
         })
+
+        # Terapkan format
+        for col_num, col_name in enumerate(df.columns):
+            if col_name in df.select_dtypes(include=["number"]).columns:
+                worksheet.set_column(col_num, col_num, 15, format_rupiah_xls)       
 
         # Jumlah kolom data
         num_cols = len(df.columns)
@@ -124,9 +132,21 @@ def get_excel_download_highlight_1st_2nd_lowest(df, sheet_name="Sheet1"):
         workbook = writer.book
         worksheet = writer.sheets[sheet_name]
 
+        # Tentukan format
+        format_rupiah_xls = workbook.add_format({'num_format': '#,##0'})
+        format_pct     = workbook.add_format({'num_format': '0.0"%"'})
+
+        # Terapkan format
+        for col_num, col_name in enumerate(df.columns):
+            if col_name in df.select_dtypes(include=["number"]).columns:
+                worksheet.set_column(col_num, col_num, 15, format_rupiah_xls)
+
+            if "%" in col_name:
+                worksheet.set_column(col_num, col_num, 15, format_pct)
+
         # --- Format umum ---
-        format_first = workbook.add_format({'bg_color': '#C6EFCE'})  # hijau Excel-style
-        format_second = workbook.add_format({'bg_color': '#FFEB9C'}) # kuning Excel-style
+        format_first = workbook.add_format({'bg_color': '#C6EFCE', "num_format": "#,##0"})  # hijau Excel-style
+        format_second = workbook.add_format({'bg_color': '#FFEB9C', "num_format": "#,##0"}) # kuning Excel-style
 
         # --- Loop baris dan kolom ---
         for row_idx, (_, row) in enumerate(df.iterrows(), start=1):
@@ -365,14 +385,14 @@ def page():
     merged_tco_styled = (
         merged_tco_total.style
         .format({col: format_rupiah for col in num_cols})
-        .apply(highlight_total_row, axis=1)
+        .apply(highlight_total_row_v2, axis=1)
     )
 
     st.session_state["merged_tco_by_region"] = merged_tco_total
     tab1.dataframe(merged_tco_styled, hide_index=True)
 
     # Download button to Excel
-    excel_data = get_excel_download(merged_tco_total)
+    excel_data = get_excel_download_highlight_total(merged_tco_total)
 
     with tab1:
         # Layout tombol (rata kanan)
@@ -1148,14 +1168,14 @@ def page():
     merged_transposed_styled = (
         merged_transposed_total.style
         .format({col: format_rupiah for col in num_cols})
-        .apply(highlight_total_row, axis=1)
+        .apply(highlight_total_row_v2, axis=1)
     )
 
     st.session_state["merged_transposed_tco_by_region"] = merged_transposed_total
     tab2.dataframe(merged_transposed_styled, hide_index=True)
 
     # Download button to Excel
-    excel_data = get_excel_download(merged_transposed_total)
+    excel_data = get_excel_download_highlight_total(merged_transposed_total)
 
     with tab2:
         # Layout tombol (rata kanan)

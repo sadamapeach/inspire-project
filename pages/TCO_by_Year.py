@@ -136,12 +136,6 @@ def get_excel_download_highlight_total(df, sheet_name="Sheet1"):
             if col_name in df.select_dtypes(include=["number"]).columns:
                 worksheet.set_column(col_num, col_num, 15, format_rupiah_xls)
 
-            if "PRICE REDUCTION (VALUE)" in col_name or "STANDARD DEVIATION" in col_name:
-                worksheet.set_column(col_num, col_num, 15, format_rupiah_xls)
-
-            if "PRICE REDUCTION (%)" in col_name or "PRICE STABILITY INDEX (%)" in col_name:
-                worksheet.set_column(col_num, col_num, 15, format_pct)
-
         # Jumlah kolom data
         num_cols = len(df.columns)
 
