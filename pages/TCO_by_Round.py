@@ -65,17 +65,17 @@ def get_excel_download(df, sheet_name="Sheet1"):
         workbook = writer.book
         worksheet = writer.sheets[sheet_name]
 
-        # Format header columns
-        header_format = workbook.add_format({
-            "bold": True,
-            "text_wrap": True,
-            "align": "center",
-            "valign": "vcenter"
-        })
+        # # Format header columns
+        # header_format = workbook.add_format({
+        #     "bold": True,
+        #     "text_wrap": True,
+        #     "align": "center",
+        #     "valign": "vcenter"
+        # })
 
-        # Terapkan format ke setiap header kolom
-        for col_num, value in enumerate(df.columns):
-            worksheet.write(0, col_num, value, header_format)
+        # # Terapkan format ke setiap header kolom
+        # for col_num, value in enumerate(df.columns):
+        #     worksheet.write(0, col_num, value, header_format)
 
         # --- Format untuk baris TOTAL ---
         bold_format = workbook.add_format({'bold': True})
@@ -101,6 +101,56 @@ def get_excel_download(df, sheet_name="Sheet1"):
 # Download highlight total
 @st.cache_data
 def get_excel_download_highlight_total(df, sheet_name="Sheet1"):
+    output = BytesIO()
+
+    # Buat file Excel dengan XlsxWriter
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        df.to_excel(writer, index=False, sheet_name=sheet_name)
+        workbook = writer.book
+        worksheet = writer.sheets[sheet_name]
+
+        # # Format header columns
+        # header_format = workbook.add_format({
+        #     "bold": True,
+        #     "text_wrap": True,
+        #     "align": "center",
+        #     "valign": "vcenter"
+        # })
+
+        # # Terapkan format ke setiap header kolom
+        # for col_num, value in enumerate(df.columns):
+        #     worksheet.write(0, col_num, value, header_format)
+
+        # Tentukan format
+        format_rupiah_xls = workbook.add_format({'num_format': '#,##0'})
+        format_pct     = workbook.add_format({'num_format': '0.0"%"'})
+        highlight_format = workbook.add_format({
+            "bold": True,
+            "bg_color": "#D9EAD3",  # hijau lembut
+            "font_color": "#1A5E20",  # hijau tua
+            "num_format": "#,##0"
+        })
+
+        # Terapkan format
+        for col_num, col_name in enumerate(df.columns):
+            if col_name in df.select_dtypes(include=["number"]).columns:
+                worksheet.set_column(col_num, col_num, 15, format_rupiah_xls)
+
+        # Jumlah kolom data
+        num_cols = len(df.columns)
+
+        # Iterasi baris (mulai dari baris 1 karena header di baris 0)
+        for row_num, row_data in enumerate(df.itertuples(index=False), start=1):
+            if any(str(x).strip().upper() == "TOTAL" for x in row_data if pd.notna(x)):
+                # Highlight hanya sel di kolom yang berisi data
+                for col_num in range(num_cols):
+                    worksheet.write(row_num, col_num, row_data[col_num], highlight_format)
+
+    return output.getvalue()
+
+# Download highlight total
+@st.cache_data
+def get_excel_download_highlight_price_trend(df, sheet_name="Sheet1"):
     output = BytesIO()
 
     # Buat file Excel dengan XlsxWriter
@@ -164,17 +214,17 @@ def get_excel_download_highlight_1st_2nd_lowest(df, sheet_name="Sheet1"):
         workbook = writer.book
         worksheet = writer.sheets[sheet_name]
 
-        # Format header columns
-        header_format = workbook.add_format({
-            "bold": True,
-            "text_wrap": True,
-            "align": "center",
-            "valign": "vcenter"
-        })
+        # # Format header columns
+        # header_format = workbook.add_format({
+        #     "bold": True,
+        #     "text_wrap": True,
+        #     "align": "center",
+        #     "valign": "vcenter"
+        # })
 
-        # Terapkan format ke setiap header kolom
-        for col_num, value in enumerate(df.columns):
-            worksheet.write(0, col_num, value, header_format)
+        # # Terapkan format ke setiap header kolom
+        # for col_num, value in enumerate(df.columns):
+        #     worksheet.write(0, col_num, value, header_format)
 
         # Tentukan format
         format_rupiah_xls = workbook.add_format({'num_format': '#,##0'})
@@ -820,7 +870,7 @@ def page():
     df_export = df_export.replace([np.nan, np.inf, -np.inf], "")
 
     # Download
-    excel_data = get_excel_download_highlight_total(df_export)
+    excel_data = get_excel_download_highlight_price_trend(df_export)
     col1, col2, col3 = st.columns([2.3,2,1])
     with col3:
         st.download_button(
