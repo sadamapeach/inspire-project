@@ -34,21 +34,12 @@ def highlight_total_row(row):
     else:
         return [""] * len(row)
     
-# # Highlight total per year
-# def highlight_total_per_year(row):
-#     # YEAR = kolom ke-1, SCOPE = kolom ke-2 (berdasarkan struktur kamu)
-#     if len(row) > 2 and str(row.iloc[2]).strip().upper() == "TOTAL" and pd.notna(row.iloc[1]):
-#         return ["font-weight: bold; background-color: #FFEB9C; color: #9C6500;"] * len(row)
-#     else:
-#         return [""] * len(row)
-
-# # Highlight vendor total
-# def highlight_vendor_total(row):
-#     # YEAR = kolom ke-1 (berdasarkan struktur kamu)
-#     if str(row.iloc[1]).strip().upper() == "TOTAL":
-#         return ["font-weight: bold; background-color: #C6EFCE; color: #006100;"] * len(row)
-#     else:
-#         return [""] * len(row)
+def highlight_total_row_v2(row):
+    # Cek apakah ada kolom yang berisi "TOTAL" (case-insensitive)
+    if any(str(x).strip().upper() == "TOTAL" for x in row):
+        return ["font-weight: bold; background-color: #D9EAD3; color: #1A5E20;"] * len(row)
+    else:
+        return [""] * len(row)
 
 # Highlight total per year
 def highlight_total_per_year(row):
@@ -80,7 +71,7 @@ def highlight_1st_2nd_vendor(row, columns):
 
 # Download button to Excel
 @st.cache_data
-def get_excel_download(df, sheet_name="Your_file_name"):
+def get_excel_download(df, sheet_name="Sheet1"):
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name=sheet_name)
@@ -110,25 +101,71 @@ def get_excel_download(df, sheet_name="Your_file_name"):
 
 # Download highlight total
 @st.cache_data
+def get_excel_download_highlight_total(df, sheet_name="Sheet1"):
+    output = BytesIO()
+
+    # Buat file Excel dengan XlsxWriter
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        df.to_excel(writer, index=False, sheet_name=sheet_name)
+        workbook = writer.book
+        worksheet = writer.sheets[sheet_name]
+
+        # Tentukan format
+        format_rupiah_xls = workbook.add_format({'num_format': '#,##0'})
+        format_pct     = workbook.add_format({'num_format': '0.0"%"'})
+        highlight_format = workbook.add_format({
+            "bold": True,
+            "bg_color": "#D9EAD3",  # hijau lembut
+            "font_color": "#1A5E20",  # hijau tua
+            "num_format": "#,##0"
+        })
+
+        # Terapkan format
+        for col_num, col_name in enumerate(df.columns):
+            if col_name in df.select_dtypes(include=["number"]).columns:
+                worksheet.set_column(col_num, col_num, 15, format_rupiah_xls)       
+
+        # Jumlah kolom data
+        num_cols = len(df.columns)
+
+        # Iterasi baris (mulai dari baris 1 karena header di baris 0)
+        for row_num, row_data in enumerate(df.itertuples(index=False), start=1):
+            if any(str(x).strip().upper() == "TOTAL" for x in row_data if pd.notna(x)):
+                # Highlight hanya sel di kolom yang berisi data
+                for col_num in range(num_cols):
+                    worksheet.write(row_num, col_num, row_data[col_num], highlight_format)
+
+    return output.getvalue()
+
+# Download highlight total
+@st.cache_data
 def get_excel_download_with_highlight(df, sheet_name="Sheet1"):
     output = BytesIO()
     
+    # Buat file Excel dengan XlsxWriter
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name=sheet_name)
-        
         workbook  = writer.book
         worksheet = writer.sheets[sheet_name]
 
-        # --- Format untuk highlight ---
+        # Format rupiah
+        format_rupiah_xls = workbook.add_format({'num_format': '#,##0'})
+        for col_num, col_name in enumerate(df.columns):
+            if col_name in df.select_dtypes(include=["number"]).columns:
+                worksheet.set_column(col_num, col_num, 15, format_rupiah_xls)
+
+        # --- Format untuk highlight --- 
         total_year_format = workbook.add_format({
             'bold': True, 
             'bg_color': '#FFEB9C',  # kuning lembut
-            'font_color': '#1A1A1A'  # kuning agak gelap
+            'font_color': '#1A1A1A',  # kuning agak gelap
+            "num_format": "#,##0"
         })
         vendor_total_format = workbook.add_format({
             'bold': True, 
             'bg_color': '#C6EFCE',  # hijau lembut
-            'font_color': '#1A5E20'  # hijau agak gelap
+            'font_color': '#1A5E20',  # hijau agak gelap
+            "num_format": "#,##0"
         })
 
         # --- Iterasi baris untuk highlight ---
@@ -154,22 +191,30 @@ def get_excel_download_with_highlight(df, sheet_name="Sheet1"):
 def get_excel_download_with_highlight_v2(df, sheet_name="Sheet1"):
     output = BytesIO()
     
+    # Buat file Excel dengan XlsxWriter
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name=sheet_name)
-        
         workbook  = writer.book
         worksheet = writer.sheets[sheet_name]
+
+        # Format rupiah
+        format_rupiah_xls = workbook.add_format({'num_format': '#,##0'})
+        for col_num, col_name in enumerate(df.columns):
+            if col_name in df.select_dtypes(include=["number"]).columns:
+                worksheet.set_column(col_num, col_num, 15, format_rupiah_xls)
 
         # --- Format untuk highlight ---
         total_year_format = workbook.add_format({
             'bold': True, 
             'bg_color': '#FFEB9C',  # kuning lembut
-            'font_color': '#1A1A1A'  # teks agak gelap
+            'font_color': '#1A1A1A',  # teks agak gelap
+            "num_format": "#,##0"
         })
         vendor_total_format = workbook.add_format({
             'bold': True, 
             'bg_color': '#C6EFCE',  # hijau lembut
-            'font_color': '#1A5E20'  # teks hijau tua
+            'font_color': '#1A5E20',  # teks hijau tua
+            "num_format": "#,##0"
         })
 
         # --- Deteksi nama kolom dinamis ---
@@ -195,16 +240,28 @@ def get_excel_download_with_highlight_v2(df, sheet_name="Sheet1"):
     return output.getvalue()
 
 # Download Highlight Excel
-def get_excel_download_highlight_1st_2nd_lowest(df, sheet_name="Your_file_name"):
+def get_excel_download_highlight_1st_2nd_lowest(df, sheet_name="Sheet1"):
     output = BytesIO()
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
         df.to_excel(writer, index=False, sheet_name=sheet_name)
         workbook = writer.book
         worksheet = writer.sheets[sheet_name]
 
+        # Tentukan format
+        format_rupiah_xls = workbook.add_format({'num_format': '#,##0'})
+        format_pct     = workbook.add_format({'num_format': '0.0"%"'})
+
+        # Terapkan format
+        for col_num, col_name in enumerate(df.columns):
+            if col_name in df.select_dtypes(include=["number"]).columns:
+                worksheet.set_column(col_num, col_num, 15, format_rupiah_xls)
+
+            if "%" in col_name:
+                worksheet.set_column(col_num, col_num, 15, format_pct)
+
         # --- Format umum ---
-        format_first = workbook.add_format({'bg_color': '#C6EFCE'})  # hijau Excel-style
-        format_second = workbook.add_format({'bg_color': '#FFEB9C'}) # kuning Excel-style
+        format_first = workbook.add_format({'bg_color': '#C6EFCE', "num_format": "#,##0"})  # hijau Excel-style
+        format_second = workbook.add_format({'bg_color': '#FFEB9C', "num_format": "#,##0"}) # kuning Excel-style
 
         # --- Loop baris dan kolom ---
         for row_idx, (_, row) in enumerate(df.iterrows(), start=1):
@@ -534,13 +591,13 @@ def page():
     df_year_styled = (
         df_year.style
         .format(format_dict)  # hanya format kolom numeric
-        .apply(highlight_total_row, axis=1)
+        .apply(highlight_total_row_v2, axis=1)
     )
 
     tab1.caption("Overview of total vendor costs per year, highlighting annual spending trends and competitiveness.")
     tab1.dataframe(df_year_styled, hide_index=True)
 
-    excel_data = get_excel_download(df_year)
+    excel_data = get_excel_download_highlight_total(df_year)
     with tab1:
         col1, col2, col3 = st.columns([2.3,2,1])
         with col3:
@@ -580,13 +637,13 @@ def page():
     df_region_styled = (
         df_region.style
         .format(format_rupiah)
-        .apply(highlight_total_row, axis=1)
+        .apply(highlight_total_row_v2, axis=1)
     )
 
     tab2.caption("Breakdown of vendor costs across regions, showing geographical spending distribution and variations.")
     tab2.dataframe(df_region_styled, hide_index=True)
 
-    excel_data = get_excel_download(df_region)
+    excel_data = get_excel_download_highlight_total(df_region)
     with tab2:
         col1, col2, col3 = st.columns([2.3,2,1])
         with col3:
@@ -623,13 +680,13 @@ def page():
     df_scope_styled = (
         df_scope.style
         .format(format_rupiah)
-        .apply(highlight_total_row, axis=1)
+        .apply(highlight_total_row_v2, axis=1)
     )
 
     tab3.caption("Summary of vendor costs by project scope, providing insight into allocation across different work packages.")
     tab3.dataframe(df_scope_styled, hide_index=True)
 
-    excel_data = get_excel_download(df_scope)
+    excel_data = get_excel_download_highlight_total(df_scope)
     with tab3:
         col1, col2, col3 = st.columns([2.3,2,1])
         with col3:
