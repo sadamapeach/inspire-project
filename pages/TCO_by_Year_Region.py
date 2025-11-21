@@ -249,7 +249,7 @@ def get_excel_download_highlight_1st_2nd_lowest(df, sheet_name="Sheet1"):
 
         # Tentukan format
         format_rupiah_xls = workbook.add_format({'num_format': '#,##0'})
-        format_pct     = workbook.add_format({'num_format': '0.0"%"'})
+        format_pct = workbook.add_format({'num_format': '0.0"%"'})
 
         # Terapkan format
         for col_num, col_name in enumerate(df.columns):
