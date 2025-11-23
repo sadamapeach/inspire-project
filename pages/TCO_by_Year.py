@@ -292,21 +292,26 @@ def page():
         df_clean.columns = df_clean.columns.map(str)
         df_clean.index = df_clean.index.map(str)
 
-        # Deteksi kolom yang mengandung "total" (case-insensitive)
-        total_cols = [col for col in df_clean.columns if "total" in col.lower()]
+        # PENANGANAN KOLOM TOTALLL
+        # Ambil semua kolom numerik
+        num_cols = df_clean.select_dtypes(include=["number"]).columns.tolist()
 
-        if len(total_cols) == 0:
-            # Jika tidak ada kolom total -> buat baru
-            df_clean["TOTAL"] = df_clean.sum(axis=1, numeric_only=True)
-
+        # Safety: kalau numeric col < 2 → tidak mungkin ada total
+        if len(num_cols) < 2:
+            df_clean["TOTAL"] = df_clean[num_cols].sum(axis=1)
         else:
-            # Jika sudah ada -> rename hanya kolom pertama yg cocok
-            first_total_col = total_cols[0]
-            df_clean = df_clean.rename(columns={first_total_col: "TOTAL"})
+            # Hitung apakah kolom numerik terakhir = penjumlahan sebelumnya
+            user_has_total = (
+                (df_clean[num_cols[:-1]].sum(axis=1) - df_clean[num_cols[-1]])
+                .abs() < 1e-6
+            ).all()  # semua baris harus match
 
-        # # Tambah kolom total
-        # if "TOTAL" not in df_clean.columns:
-        #     df_clean["TOTAL"] = df_clean.sum(axis=1, numeric_only=True)
+            if user_has_total:
+                # Anggap kolom terakhir sebagai TOTAL
+                df_clean = df_clean.rename(columns={num_cols[-1]: "TOTAL"})
+            else:
+                # User belum hitung TOTAL → kita buat
+                df_clean["TOTAL"] = df_clean[num_cols].sum(axis=1)
 
         # Pembulatan
         num_cols = df_clean.select_dtypes(include=["number"]).columns
