@@ -42,22 +42,6 @@ def highlight_total_row_v2(row):
     else:
         return [""] * len(row)
     
-# Highlight total per round
-def highlight_total_per_round(row):
-    # Kita ambil kolom ke-1 karena kolom 0 = ROUND
-    if len(row) > 1 and str(row.iloc[1]).strip().upper() == "TOTAL":
-        return ["font-weight: bold; background-color: #FFEB9C; color: #9C6500;"] * len(row)
-    else:
-        return [""] * len(row)
-
-# Highlight vendor total
-def highlight_total_all_round(row):
-    # Kolom pertama (index 0) adalah kolom ROUND
-    if str(row.iloc[0]).strip().upper() == "TOTAL":
-        return ["font-weight: bold; background-color: #C6EFCE; color: #006100;"] * len(row)
-    else:
-        return [""] * len(row)
-    
 def highlight_1st_2nd_vendor(row, columns):
     styles = [""] * len(columns)
     first_vendor = row.get("1st Vendor")
@@ -114,11 +98,19 @@ def get_excel_download_highlight_total(df, sheet_name="Sheet1"):
         worksheet = writer.sheets[sheet_name]
 
         # Tentukan format
+        format_rupiah_xls = workbook.add_format({'num_format': '#,##0'})
+        format_pct     = workbook.add_format({'num_format': '0.0"%"'})
         highlight_format = workbook.add_format({
             "bold": True,
             "bg_color": "#D9EAD3",  # hijau lembut
-            "font_color": "#1A5E20"  # hijau tua
+            "font_color": "#1A5E20",  # hijau tua
+            "num_format": "#,##0"
         })
+
+        # Terapkan format
+        for col_num, col_name in enumerate(df.columns):
+            if col_name in df.select_dtypes(include=["number"]).columns:
+                worksheet.set_column(col_num, col_num, 15, format_rupiah_xls)
 
         # Jumlah kolom data
         num_cols = len(df.columns)
@@ -140,9 +132,21 @@ def get_excel_download_highlight_1st_2nd_lowest(df, sheet_name="Sheet1"):
         workbook = writer.book
         worksheet = writer.sheets[sheet_name]
 
+        # Tentukan format
+        format_rupiah_xls = workbook.add_format({'num_format': '#,##0'})
+        format_pct     = workbook.add_format({'num_format': '0.0"%"'})
+
+        # Terapkan format
+        for col_num, col_name in enumerate(df.columns):
+            if col_name in df.select_dtypes(include=["number"]).columns:
+                worksheet.set_column(col_num, col_num, 15, format_rupiah_xls)
+
+            if "%" in col_name:
+                worksheet.set_column(col_num, col_num, 15, format_pct)
+
         # --- Format umum ---
-        format_first = workbook.add_format({'bg_color': '#C6EFCE'})  # hijau Excel-style
-        format_second = workbook.add_format({'bg_color': '#FFEB9C'}) # kuning Excel-style
+        format_first = workbook.add_format({'bg_color': '#C6EFCE', "num_format": "#,##0"})  # hijau Excel-style
+        format_second = workbook.add_format({'bg_color': '#FFEB9C', "num_format": "#,##0"}) # kuning Excel-style
 
         # --- Loop baris dan kolom ---
         for row_idx, (_, row) in enumerate(df.iterrows(), start=1):
@@ -167,47 +171,61 @@ def get_excel_download_highlight_1st_2nd_lowest(df, sheet_name="Sheet1"):
 
     return output.getvalue()
 
-# Download highlight total per round
+# Download highlight total
 @st.cache_data
-def get_excel_download_with_highlight_round(df, sheet_name="Sheet1"):
+def get_excel_download_highlight_price_trend(df, sheet_name="Sheet1"):
     output = BytesIO()
 
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+    # Buat file Excel dengan XlsxWriter
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
         df.to_excel(writer, index=False, sheet_name=sheet_name)
-        
-        workbook  = writer.book
+        workbook = writer.book
         worksheet = writer.sheets[sheet_name]
 
-        # --- Format untuk highlight ---
-        total_round_format = workbook.add_format({
-            'bold': True, 
-            'bg_color': '#FFEB9C',  # kuning lembut
-            'font_color': '#9C6500'  # kuning agak gelap
-        })
-        total_all_format = workbook.add_format({
-            'bold': True, 
-            'bg_color': '#C6EFCE',  # hijau lembut
-            'font_color': '#006100'  # hijau agak gelap
+        # Format header columns
+        header_format = workbook.add_format({
+            "bold": True,
+            "text_wrap": True,
+            "align": "center",
+            "valign": "vcenter"
         })
 
-        # --- Iterasi baris untuk highlight ---
-        for row_num, row in df.iterrows():
-            round_val = str(row[df.columns[0]]).strip().upper()     # kolom ROUND
-            scope_val = str(row[df.columns[1]]).strip().upper()     # kolom scope pertama (dinamis)
+        # Terapkan format ke setiap header kolom
+        for col_num, value in enumerate(df.columns):
+            worksheet.write(0, col_num, value, header_format)
 
-            if scope_val == "TOTAL" and round_val != "TOTAL":
-                fmt = total_round_format
-            elif round_val == "TOTAL":
-                fmt = total_all_format
-            else:
-                continue
+        # Tentukan format
+        format_rupiah_xls = workbook.add_format({'num_format': '#,##0'})
+        format_pct = workbook.add_format({'num_format': '0.0"%"'})
+        highlight_format = workbook.add_format({
+            "bold": True,
+            "bg_color": "#D9EAD3",  # hijau lembut
+            "font_color": "#1A5E20",  # hijau tua
+            "num_format": "#,##0"
+        })
 
-            # Warnai semua kolom pada baris ini
-            for col_num, value in enumerate(row):
-                worksheet.write(row_num + 1, col_num, value, fmt)
+        # Terapkan format
+        for col_num, col_name in enumerate(df.columns):
+            if col_name in df.select_dtypes(include=["number"]).columns:
+                worksheet.set_column(col_num, col_num, 15, format_rupiah_xls)
+
+            if "PRICE REDUCTION (VALUE)" in col_name or "STANDARD DEVIATION" in col_name:
+                worksheet.set_column(col_num, col_num, 15, format_rupiah_xls)
+
+            if "PRICE REDUCTION (%)" in col_name or "PRICE STABILITY INDEX (%)" in col_name:
+                worksheet.set_column(col_num, col_num, 15, format_pct)
+
+        # Jumlah kolom data
+        num_cols = len(df.columns)
+
+        # Iterasi baris (mulai dari baris 1 karena header di baris 0)
+        for row_num, row_data in enumerate(df.itertuples(index=False), start=1):
+            if any(str(x).strip().upper() == "TOTAL" for x in row_data if pd.notna(x)):
+                # Highlight hanya sel di kolom yang berisi data
+                for col_num in range(num_cols):
+                    worksheet.write(row_num, col_num, row_data[col_num], highlight_format)
 
     return output.getvalue()
-
 
 def page():
     # Header Title
@@ -766,7 +784,7 @@ def page():
 
     # Urutkan lagi: vendor tetap grouping
     df_pivot = df_pivot.sort_values(["VENDOR", scope_cols[0]], key=lambda s: s.replace("TOTAL", "ZZZ"))
-
+    
     # Tambahkan slicer 
     all_vendor = sorted(df_pivot[vendor_col].dropna().unique())
     all_trend  = sorted(df_pivot["PRICE TREND"].dropna().unique())
@@ -827,7 +845,7 @@ def page():
     df_export = df_export.replace([np.nan, np.inf, -np.inf], "")
 
     # Simpan hasil ke variabel
-    excel_data = get_excel_download_highlight_total(df_export)
+    excel_data = get_excel_download_highlight_price_trend(df_export)
 
     # Layout tombol (rata kanan)
     col1, col2, col3 = st.columns([2.3,2,1])

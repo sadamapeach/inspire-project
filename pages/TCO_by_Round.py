@@ -281,13 +281,78 @@ def page():
         unsafe_allow_html=True
     )
 
+    # Initialize key counter for dynamic uploader
+    if "upload_key_counter" not in st.session_state:
+        st.session_state.upload_key_counter = 0
+
+    # Initialize stored file list
+    if "uploaded_files" not in st.session_state:
+        st.session_state.uploaded_files = []
+
+    # RESET ketika user upload file baru
+    def reset_upload():
+        key = f"uploader_{st.session_state.upload_key_counter}"
+
+        # Ambil file yang baru di-upload (kalau ada)
+        new_files = st.session_state.get(key, None)
+
+        if new_files:
+            # Overwrite file lama
+            st.session_state.uploaded_files = new_files
+
+        # Reset processing flag
+        st.session_state.pop("already_processed_tco_by_round", None)
+
+        # Ganti key untuk uploader baru pada render berikutnya
+        st.session_state.upload_key_counter += 1
+
+    current_key = f"uploader_{st.session_state.upload_key_counter}"
+
     # FILE UPLOADERR
     st.markdown("##### 📂 Upload Files")
     upload_files = st.file_uploader(
         "Upload multiple Excel files (e.g., L2R1.xlsx, L2R2.xlsx)", 
         type=["xlsx", "xls"],
-        accept_multiple_files=True
+        accept_multiple_files=True,
+        key=current_key,
+        on_change=reset_upload
     )
+
+    # files = st.session_state.uploaded_files
+
+    # if files:
+    #     # st.caption("**Files uploaded:**")
+    #     file_list = "\n".join([f"- {f.name}" for f in files])
+    #     st.caption(file_list)
+
+    files = st.session_state.uploaded_files
+
+    if files:
+        max_rows = 3
+
+        # Hitung jumlah kolom dinamis
+        total_files = len(files)
+        num_cols = (total_files + max_rows - 1) // max_rows  # ceil
+
+        # Siapkan grid: 3 rows × num_cols
+        grid = [[""] * num_cols for _ in range(max_rows)]
+
+        # Isi grid: isi kolom per kolom
+        for idx, f in enumerate(files):
+            row = idx % max_rows
+            col = idx // max_rows
+            grid[row][col] = f"• {f.name}"
+
+        # Render baris satu per satu
+        for row in grid:
+            cols = st.columns(num_cols)
+
+            for col_idx, text in enumerate(row):
+                if text:
+                    cols[col_idx].caption(
+                        f"<p style='margin:0; padding:2px 4px;'>{text}</p>",
+                        unsafe_allow_html=True
+                    )
 
     # Pre-processing
     def clean_dataframe(df):
@@ -320,16 +385,22 @@ def page():
 
         return df_clean
 
-    # Kalau ada upload baru → overwrite & reset flag
-    if upload_files:
-        st.session_state["upload_multi_file_tco_by_round"] = upload_files
-        st.session_state.pop("already_processed_tco_by_round", None)
+    # # Kalau ada upload baru → overwrite & reset flag
+    # if upload_files:
+    #     st.session_state["upload_multi_file_tco_by_round"] = upload_files
+    #     st.session_state.pop("already_processed_tco_by_round", None)
 
-    # Kalau belum ada file yang tersimpan → stop
-    if "upload_multi_file_tco_by_round" not in st.session_state:
+    # # Kalau belum ada file yang tersimpan → stop
+    # if "upload_multi_file_tco_by_round" not in st.session_state:
+    #     st.stop()
+
+    # files_to_process = st.session_state["upload_multi_file_tco_by_round"]
+
+    files_to_process = st.session_state.uploaded_files
+
+    # Jika belum ada file → stop
+    if not files_to_process:
         st.stop()
-
-    files_to_process = st.session_state["upload_multi_file_tco_by_round"]
     
     # Proses upload hanya sekali per set file
     if "already_processed_tco_by_round" not in st.session_state:
@@ -388,7 +459,7 @@ def page():
 
     # Simpan ke session
     st.session_state["merge_tco_by_round"] = df_final
-    # st.session_state["already_processed_tco_by_round"] = True
+    st.session_state["already_processed_tco_by_round"] = True
 
     st.divider()
    
