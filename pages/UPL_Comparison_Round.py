@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import altair as alt
 import time
+import math
 import os
 from io import BytesIO
 
@@ -55,6 +56,17 @@ def highlight_1st_2nd_vendor(row, columns):
             # styles[i] = "background-color: #d7c6f3; color: #402e72;"
             styles[i] = "background-color: #FFEB9C; color: #9C6500;"
     return styles
+
+def safe_write(ws, row, col, val, fmt=None):
+    if val is None:
+        ws.write(row, col, "", fmt)
+        return
+    
+    if isinstance(val, float) and (math.isnan(val) or math.isinf(val)):
+        ws.write(row, col, "", fmt)
+        return
+
+    ws.write(row, col, val, fmt)
     
 # Download button to Excel
 @st.cache_data
@@ -176,9 +188,26 @@ def get_excel_download_highlight_1st_2nd_lowest(df, sheet_name="Sheet1"):
 def get_excel_download_highlight_price_trend(df, sheet_name="Sheet1"):
     output = BytesIO()
 
+    # Buat salinan untuk di-export dan deteksi kolom numeric secara robust
+    df_to_write = df.copy()
+
+    numeric_cols = []
+    for col in df_to_write.columns:
+        # Coerce ke numeric — angka valid tetap, non-angka -> NaN
+        coerced = pd.to_numeric(df_to_write[col], errors="coerce")
+
+        # Jika setelah coercion ada minimal satu angka, treat column as numeric
+        if coerced.notna().any():
+            numeric_cols.append(col)
+            # Replace original column dengan versi numeric (NaN untuk non-number)
+            df_to_write[col] = coerced
+        else:
+            # biarkan kolom original (string / object) tetap apa adanya
+            pass
+
     # Buat file Excel dengan XlsxWriter
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-        df.to_excel(writer, index=False, sheet_name=sheet_name)
+        df_to_write.to_excel(writer, index=False, sheet_name=sheet_name)
         workbook = writer.book
         worksheet = writer.sheets[sheet_name]
 
@@ -191,7 +220,7 @@ def get_excel_download_highlight_price_trend(df, sheet_name="Sheet1"):
         })
 
         # Terapkan format ke setiap header kolom
-        for col_num, value in enumerate(df.columns):
+        for col_num, value in enumerate(df_to_write.columns):
             worksheet.write(0, col_num, value, header_format)
 
         # Tentukan format
@@ -205,8 +234,8 @@ def get_excel_download_highlight_price_trend(df, sheet_name="Sheet1"):
         })
 
         # Terapkan format
-        for col_num, col_name in enumerate(df.columns):
-            if col_name in df.select_dtypes(include=["number"]).columns:
+        for col_num, col_name in enumerate(df_to_write.columns):
+            if col_name in numeric_cols:
                 worksheet.set_column(col_num, col_num, 15, format_rupiah_xls)
 
             if "PRICE REDUCTION (VALUE)" in col_name or "STANDARD DEVIATION" in col_name:
@@ -216,14 +245,15 @@ def get_excel_download_highlight_price_trend(df, sheet_name="Sheet1"):
                 worksheet.set_column(col_num, col_num, 15, format_pct)
 
         # Jumlah kolom data
-        num_cols = len(df.columns)
+        num_cols = len(df_to_write.columns)
 
         # Iterasi baris (mulai dari baris 1 karena header di baris 0)
-        for row_num, row_data in enumerate(df.itertuples(index=False), start=1):
+        for row_num, row_data in enumerate(df_to_write.itertuples(index=False), start=1):
             if any(str(x).strip().upper() == "TOTAL" for x in row_data if pd.notna(x)):
                 # Highlight hanya sel di kolom yang berisi data
                 for col_num in range(num_cols):
-                    worksheet.write(row_num, col_num, row_data[col_num], highlight_format)
+                    val = row_data[col_num]
+                    safe_write(worksheet, row_num, col_num, val, highlight_format)
 
     return output.getvalue()
 
@@ -243,13 +273,71 @@ def page():
         unsafe_allow_html=True
     )
 
+    # Initialize key counter for dynamic uploader
+    if "upload_key_counter_upl" not in st.session_state:
+        st.session_state.upload_key_counter_upl = 0
+
+    # Initialize stored file list
+    if "uploaded_files_upl" not in st.session_state:
+        st.session_state.uploaded_files_upl = []
+
+    # RESET ketika user upload file baru
+    def reset_upload():
+        key = f"uploader_{st.session_state.upload_key_counter_upl}"
+
+        # Ambil file yang baru di-upload (kalau ada)
+        new_files = st.session_state.get(key, None)
+
+        if new_files:
+            # Overwrite file lama
+            st.session_state.uploaded_files_upl = new_files
+
+        # Reset processing flag
+        st.session_state.pop("already_processed_upl_round_by_round", None)
+
+        # Ganti key untuk uploader baru pada render berikutnya
+        st.session_state.upload_key_counter_upl += 1
+
+    current_key = f"uploader_{st.session_state.upload_key_counter_upl}"
+
     # File Uploader
     st.markdown("##### 📂 Upload Files")
     upload_files = st.file_uploader(
         "Upload multiple Excel files (e.g., L2R1.xlsx, L2R2.xlsx)",
-        type=["xlsx"],
-        accept_multiple_files=True
+        type=["xlsx", "xls"],
+        accept_multiple_files=True,
+        key=current_key,
+        on_change=reset_upload
     )
+
+    files = st.session_state.uploaded_files_upl
+
+    if files:
+        max_rows = 3
+
+        # Hitung jumlah kolom dinamis
+        total_files = len(files)
+        num_cols = (total_files + max_rows - 1) // max_rows  # ceil
+
+        # Siapkan grid: 3 rows × num_cols
+        grid = [[""] * num_cols for _ in range(max_rows)]
+
+        # Isi grid: isi kolom per kolom
+        for idx, f in enumerate(files):
+            row = idx % max_rows
+            col = idx // max_rows
+            grid[row][col] = f"• {f.name}"
+
+        # Render baris satu per satu
+        for row in grid:
+            cols = st.columns(num_cols)
+
+            for col_idx, text in enumerate(row):
+                if text:
+                    cols[col_idx].caption(
+                        f"<p style='margin:0; padding:2px 4px;'>{text}</p>",
+                        unsafe_allow_html=True
+                    )
  
     # Pre-processing
     def clean_dataframe(df):
@@ -284,16 +372,20 @@ def page():
 
         return df_clean
 
-    # Kalau ada upload baru → overwrite & reset flag
-    if upload_files:
-        st.session_state["upload_multi_file_upl_round_by_round"] = upload_files
-        st.session_state.pop("already_processed_upl_round_by_round", None)
+    # # Kalau ada upload baru → overwrite & reset flag
+    # if upload_files:
+    #     st.session_state["upload_multi_file_upl_round_by_round"] = upload_files
+    #     st.session_state.pop("already_processed_upl_round_by_round", None)
 
-    # Kalau belum ada file yang tersimpan → stop
-    if "upload_multi_file_upl_round_by_round" not in st.session_state:
+    # # Kalau belum ada file yang tersimpan → stop
+    # if "upload_multi_file_upl_round_by_round" not in st.session_state:
+    #     st.stop()
+
+    files_to_process = st.session_state.uploaded_files_upl
+
+    # Jika belum ada file → stop
+    if not files_to_process:
         st.stop()
-
-    files_to_process = st.session_state["upload_multi_file_upl_round_by_round"]
 
     # Proses upload hanya sekali per set file
     if "already_processed_upl_round_by_round" not in st.session_state:
