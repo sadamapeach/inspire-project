@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import altair as alt
 import time
+import math
 import re
 from io import BytesIO
 
@@ -50,35 +51,52 @@ def highlight_min_cell(row):
         else:
             styles.append("")
     return styles
+
+def safe_write(ws, row, col, val, fmt=None):
+    if val is None:
+        ws.write(row, col, "", fmt)
+        return
+    
+    if isinstance(val, float) and (math.isnan(val) or math.isinf(val)):
+        ws.write(row, col, "", fmt)
+        return
+
+    ws.write(row, col, val, fmt)
     
 # Download button to Excel
 @st.cache_data
 def get_excel_download(df, sheet_name="Sheet1"):
     output = BytesIO()
+
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name=sheet_name)
-        workbook = writer.book
+        workbook  = writer.book
         worksheet = writer.sheets[sheet_name]
 
-        # --- Format untuk baris TOTAL ---
-        bold_format = workbook.add_format({'bold': True})
+        # FORMAT
+        fmt_number = workbook.add_format({'num_format': '#,##0'})
+        fmt_pct    = workbook.add_format({'num_format': '0.0"%"'})
+        fmt_bold   = workbook.add_format({'bold': True})
 
-        # Cari baris dengan label 'TOTAL' di kolom pertama
+        # DETEKSI NUMERIC COLUMNS
+        numeric_cols = df.select_dtypes(include=["number"]).columns
+
+        # APPLY FORMAT COLUMN-BY-COLUMN
+        for col_idx, col_name in enumerate(df.columns):
+
+            # Percentage columns by name
+            if "%" in col_name.upper():
+                worksheet.set_column(col_idx, col_idx, 15, fmt_pct)
+
+            # Numeric columns
+            elif col_name in numeric_cols:
+                worksheet.set_column(col_idx, col_idx, 15, fmt_number)
+
+        # --- BOLD ROW "TOTAL" ---
         total_rows = df.index[df.iloc[:, 0].astype(str).str.upper() == "TOTAL"].tolist()
+        for r in total_rows:
+            worksheet.set_row(r + 1, None, fmt_bold)
 
-        # Terapkan bold ke seluruh baris yang mengandung "TOTAL"
-        for row in total_rows:
-            worksheet.set_row(row + 1, None, bold_format)  # +1 karena header Excel mulai dari baris 1
-
-        # (Opsional) Autofit kolom agar rapih
-        for i, col in enumerate(df.columns):
-            max_len = max(
-                df[col].astype(str).map(len).max(),
-                len(str(col))
-            ) + 2
-            worksheet.set_column(i, i, max_len)
-
-    output.seek(0)
     return output.getvalue()
 
 # Download highlight total
@@ -86,18 +104,42 @@ def get_excel_download(df, sheet_name="Sheet1"):
 def get_excel_download_highlight(df, sheet_name="Sheet1"):
     output = BytesIO()
 
+    # Buat salinan untuk di-export dan deteksi kolom numeric secara robust
+    df_to_write = df.copy()
+
+    numeric_cols = []
+    for col in df_to_write.columns:
+        # Coerce ke numeric — angka valid tetap, non-angka -> NaN
+        coerced = pd.to_numeric(df_to_write[col], errors="coerce")
+
+        # Jika setelah coercion ada minimal satu angka, treat column as numeric
+        if coerced.notna().any():
+            numeric_cols.append(col)
+            # Replace original column dengan versi numeric (NaN untuk non-number)
+            df_to_write[col] = coerced
+        else:
+            # biarkan kolom original (string / object) tetap apa adanya
+            pass
+
     # Buat file Excel dengan XlsxWriter
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-        df.to_excel(writer, index=False, sheet_name=sheet_name)
+        df_to_write.to_excel(writer, index=False, sheet_name=sheet_name)
         workbook = writer.book
         worksheet = writer.sheets[sheet_name]
 
         # Format untuk highlight min value
+        format_pct = workbook.add_format({'num_format': '0.0"%"'})
         highlight_format = workbook.add_format({
             "bold": True,
-            "bg_color": "#C6EFCE",  # hijau lembut
-            "font_color": "#006100"  # hijau tua
+            "bg_color": "#D9EAD3",  # hijau lembut
+            "font_color": "#1A5E20",  # hijau tua
+            "num_format": "#,##0"
         })
+
+        # Terapkan format
+        for col_num, col_name in enumerate(df_to_write.columns):
+            if col_name in numeric_cols:
+                worksheet.set_column(col_num, col_num, 15, format_pct)
 
         # Iterasi baris (mulai dari baris 1 karena header di baris 0)
         for row_num, row_data in enumerate(df.itertuples(index=False), start=1):
@@ -302,24 +344,45 @@ def page():
         .rank(method="min", ascending=True)
     )
 
+    def ordinal(n: int) -> str:
+        # Return string like "1st", "2nd", "3rd", "4th", ...
+        if 10 <= (n % 100) <= 20:
+            suffix = "th"
+        else:
+            suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+        return f"{n}{suffix}"
+
     summary_rows = []
     for comp, group in df_long.groupby(scope_col):
         group = group.sort_values("Rank").reset_index(drop=True)
+
+        # safety: skip grouping kalau kosong (guard)
+        if group.shape[0] == 0:
+            continue
+
         base_price = group.loc[0, "Price"]
+
         row_data = {
             df_clean.columns[0]: comp,
             "1st Rank": group.loc[0, "Vendor"],
             "Best Price": base_price
         }
 
-        # Tambahkan 2nd, 3rd, dst secara horizontal
+        # Tambahkan 2nd, 3rd, dst secara horizontal dengan suffix ordinal
         for i in range(1, len(group)):
-            rank = i+1
+            rank = i + 1  # 2,3,4,...
             vendor = group.loc[i, "Vendor"]
             price = group.loc[i, "Price"]
-            deviation = ((price - base_price) / base_price) * 100
-            row_data[f"{rank}th Rank"] = vendor
-            row_data[f"Dev. {rank}th to 1st (%)"] = deviation
+
+            # Aman terhadap pembagian nol / NaN
+            if pd.isna(base_price) or base_price == 0:
+                deviation = np.nan
+            else:
+                deviation = ((price - base_price) / base_price) * 100
+
+            row_data[f"{ordinal(rank)} Rank"] = vendor
+            row_data[f"Dev. {ordinal(rank)} to 1st (%)"] = deviation
+
         summary_rows.append(row_data)
 
     df_summary = pd.DataFrame(summary_rows)
