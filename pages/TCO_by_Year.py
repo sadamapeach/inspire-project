@@ -355,13 +355,26 @@ def page():
     for vendor, df_clean in result.items():
         df_temp = df_clean.copy()
 
-        # Tambahkan baris total di akhir
-        total_row = {df_temp.columns[0]: "TOTAL"}
-        for col in df_temp.columns[1:]:
-            total_row[col] = df_temp[col].sum(numeric_only=True)
+        # Identifikasi kolom numerik & non-numerik
+        num_cols = df_temp.select_dtypes(include=["number"]).columns.tolist()
+
+        # Buat baris TOTAL
+        total_row = {col: "" for col in df_temp.columns}
+
+        for col in df_temp.columns:
+            if col == df_temp.columns[0]:
+                total_row[col] = "TOTAL"
+            elif col in num_cols:
+                total_row[col] = df_temp[col].sum()
+            else:
+                total_row[col] = "" 
+        
+        # Tambahkan baris total
         df_temp = pd.concat([df_temp, pd.DataFrame([total_row])], ignore_index=True)
 
+        # Tambahkan kolom vendor paling depan
         df_temp.insert(0, "VENDOR", vendor)
+
         merged_list.append(df_temp)
 
     # Gabungkan semua vendor jadi satu DataFrame
@@ -384,7 +397,7 @@ def page():
     st.dataframe(merged_overview_styled, hide_index=True)
 
     # Download
-    excel_data = get_excel_download_highlight_total(merged_overview, sheet_name="TCO Overview")
+    excel_data = get_excel_download_highlight_total(merged_overview)
     col1, col2, col3 = st.columns([2.3,2,1])
     with col3:
         st.download_button(
@@ -406,27 +419,43 @@ def page():
     ref_order = None  # simpan urutan referensi dari sheet pertama
 
     for i, (name, df_sub) in enumerate(result.items()):
-        first_col = df_sub.columns[0]   # TCO Component
-        total_col = "TOTAL"             # Total cost 5Y
+        num_cols = df_sub.select_dtypes(include=["number"]).columns.tolist()
+        non_num_cols = [c for c in df_sub.columns if c not in num_cols]
+        total_col = "TOTAL"     # Total cost 5Y
 
-        df_merge = df_sub[[first_col, total_col]].rename(columns={total_col: name})
+        df_merge = df_sub[non_num_cols + [total_col]].rename(columns={total_col: name})
 
         # Simpan urutan referensi dari sheet pertama
         if i == 0:
-            ref_order = df_merge[first_col].tolist()
+            ref_order = df_merge[non_num_cols].astype(str)
+            first_non_num_cols = non_num_cols.copy()
             merged = df_merge
         else:
-            merged = merged.merge(df_merge, on=first_col, how="outer")
+            merged = merged.merge(df_merge, on=non_num_cols, how="outer")
 
     # Reorder baris sesuai urutan dari sheet pertama
     if ref_order is not None:
-        merged[first_col] = pd.Categorical(merged[first_col], categories=ref_order, ordered=True)
-        merged = merged.sort_values(first_col).reset_index(drop=True)
+        for col in first_non_num_cols:
+            merged[col] = merged[col].astype(str)
+            categories = list(dict.fromkeys(ref_order[col].astype(str).tolist()))
+            merged[col] = pd.Categorical(
+                merged[col], 
+                categories=categories,
+                ordered=True
+            )
+        merged = merged.sort_values(first_non_num_cols).reset_index(drop=True)
 
     # Menambahkan baris total di akhir
-    total_row = {first_col: "TOTAL"}
-    for col in merged.columns[1:]:
-        total_row[col] = merged[col].sum(numeric_only=True)
+    total_row = {col: "" for col in merged.columns}  # kosongkan dulu
+
+    # isi label TOTAL di kolom non-numerik pertama
+    if len(first_non_num_cols) > 0:
+        total_row[first_non_num_cols[0]] = "TOTAL"
+
+    # hitung total untuk numeric columns
+    for col in merged.columns:
+        if pd.api.types.is_numeric_dtype(merged[col]):
+            total_row[col] = merged[col].sum()
 
     merged_total = pd.concat([merged, pd.DataFrame([total_row])], ignore_index=True)
 
@@ -529,14 +558,29 @@ def page():
             # Konversi nominal jadi float
             amount_value = float(cleaned_amount)
 
-            # Kalikan semua kolom numerik (selain kolom pertama)
+            # Salin merged untuk dikalikan
             df_converted = merged.copy(deep=True)
-            num_cols = df_converted.columns[1:]
-            df_converted.loc[:, num_cols] = (
-                df_converted.loc[:, num_cols]
-                .apply(pd.to_numeric, errors="coerce")
-                .multiply(amount_value)
-            )
+
+            # Identifikasi kolom numerik
+            def is_convertible_numeric(series: pd.Series) -> bool:
+                coerced = pd.to_numeric(series, errors="coerce")
+                return coerced.notna().any()
+
+            # jangan sentuh kolom pertama (biasanya TCO Component)
+            cols_except_first = list(df_converted.columns[1:])
+
+            # pilih kolom yang "bisa" menjadi numeric dari kolom-kolom tersebut
+            numeric_cols_to_multiply = [
+                c for c in cols_except_first if is_convertible_numeric(df_converted[c])
+            ]
+
+            # Konversi & kalikan hanya pada kolom terdeteksi
+            if numeric_cols_to_multiply:
+                df_converted.loc[:, numeric_cols_to_multiply] = (
+                    df_converted.loc[:, numeric_cols_to_multiply]
+                    .apply(pd.to_numeric, errors="coerce")
+                    .multiply(amount_value)
+                )
 
             # Simpan hasil ke session_state (biar tidak hilang)
             st.session_state["converted_tco_by_year"] = df_converted
@@ -552,19 +596,30 @@ def page():
             st.markdown("###### Converted Price")
             st.caption(f"Summary of total bidders after currency conversion to {currency} at a rate of {amount}.")
 
-            # Menambahkan baris total di akhir
-            total_row = {first_col: "TOTAL"}
-            for col in df_converted.columns[1:]:
-                total_row[col] = df_converted[col].sum(numeric_only=True)
+            # Identifikasi numeric & non-numeric columns
+            num_cols = df_converted.select_dtypes(include=["number"]).columns.tolist()
+            non_num_cols = [c for c in df_converted.columns if c not in num_cols]
 
+            # Buat baris total dinamis
+            total_row = {col: "" for col in df_converted.columns}
+
+            # Isi label "TOTAL" pada kolom non-numeric pertama
+            if len(non_num_cols) > 0:
+                total_row[non_num_cols[0]] = "TOTAL"
+
+            # Hitung sum hanya untuk kolom numeric
+            for col in num_cols:
+                total_row[col] = df_converted[col].sum()
+
+            # Gabungkan
             converted_total = pd.concat([df_converted, pd.DataFrame([total_row])], ignore_index=True)
 
             # Fomat Rupiah & fungsi untuk styling baris TOTAL
-            num_cols = converted_total.select_dtypes(include=["number"]).columns
+            num_cols_after = converted_total.select_dtypes(include=["number"]).columns
 
             converted_styled = (
                 converted_total.style
-                .format({col: format_rupiah for col in num_cols})
+                .format({col: format_rupiah for col in num_cols_after})
                 .apply(highlight_total_row_v2, axis=1)
             )
 
@@ -592,12 +647,15 @@ def page():
 
     df_analysis = merged_total.copy()
 
-    # Ambil nama kolom vendor (semua kecuali kolom pertama)
-    tco_col = df_analysis.columns[0]
-    vendor_cols = [c for c in df_analysis.columns if c != tco_col]
+    # Identifikasi kolom
+    non_numeric_cols = df_analysis.select_dtypes(exclude=["number"]).columns.tolist()
+    vendor_cols = df_analysis.select_dtypes(include=["number"]).columns.tolist()
 
     # Hapus baris TOTAL untuk analisis per komponen
-    df_no_total = df_analysis[df_analysis[tco_col].str.upper() != "TOTAL"].copy()
+    first_non_numeric = non_numeric_cols[0]
+    df_no_total = df_analysis[
+        df_analysis[first_non_numeric].astype(str).str.upper() != "TOTAL"
+    ].copy()
 
     # Hitung nilai analisis per baris
     df_no_total["1st Lowest"] = df_no_total[vendor_cols].min(axis=1)
@@ -632,20 +690,13 @@ def page():
 
     # Urutkan kolom sesuai struktur yang diinginkan
     analysis_cols = (
-        [tco_col]
+        non_numeric_cols
         + vendor_cols
         + ["1st Lowest", "1st Vendor", "2nd Lowest", "2nd Vendor", "Gap 1 to 2 (%)", "Median Price"]
         + [f"{v} to Median (%)" for v in vendor_cols]
     )
 
     df_analysis_final = df_no_total[analysis_cols]
-
-    # Format rupiah
-    num_cols = df_analysis_final.select_dtypes(include=["number"]).columns
-    format_dic = {col: format_rupiah for col in num_cols}
-    format_dic.update({"Gap 1 to 2 (%)": "{:.1f}%"})
-    for v in vendor_cols:
-        format_dic[f"{v} to Median (%)"] = "{:+.1f}%"
 
     # SLICERR FOR ANALYSIS
     all_1st = sorted(df_analysis_final["1st Vendor"].dropna().unique())
@@ -681,6 +732,13 @@ def page():
         df_filtered = df_analysis_final[df_analysis_final["2nd Vendor"].isin(selected_2nd)]
     else:
         df_filtered = df_analysis_final.copy()
+
+    # Format rupiah
+    num_cols = df_filtered.select_dtypes(include=["number"]).columns
+    format_dic = {col: format_rupiah for col in num_cols}
+    format_dic.update({"Gap 1 to 2 (%)": "{:.1f}%"})
+    for v in vendor_cols:
+        format_dic[f"{v} to Median (%)"] = "{:+.1f}%"
 
     df_analysis_styled = (
         df_filtered.style
@@ -900,8 +958,14 @@ def page():
         st.caption("Each chart shows total offer comparison and ranking for every requirement.")
         if merged is not None and not merged.empty:
             tab3, tab4 = st.tabs(["💲Original Price", "💱 Converted Price"])
-            reqs = merged[merged.columns[0]]
-            vendors = merged.columns[1:]
+
+            # Identifikasi kolom
+            non_numeric_cols = merged.select_dtypes(exclude=["number"]).columns.tolist()
+            vendor_cols = merged.select_dtypes(include=["number"]).columns.tolist()
+
+            # Requirements (pakai kolom non-numeric pertama, misal TCO Component)
+            reqs = merged[non_numeric_cols[0]]
+            vendors = vendor_cols
 
             tab3.caption("")
 
@@ -914,8 +978,11 @@ def page():
                         req = reqs[i + j]
 
                         # --- Data vendor + harga ---
-                        prices = merged.loc[i + j, vendors].reset_index()
+                        prices = merged.loc[i + j, vendor_cols].reset_index()
                         prices.columns = ["Vendor", "Total"]
+
+                        # pastikan numeric
+                        prices["Total"] = pd.to_numeric(prices["Total"], errors="coerce")
 
                         # Urutkan harga + tambahkan rank
                         df_chart = prices.sort_values("Total", ascending=True).reset_index(drop=True)
@@ -1012,7 +1079,8 @@ def page():
             # Cek apakah data hasil konversi sudah ada
             if amount.strip() != "" and currency.strip() != "":
                 reqs = df_converted[df_converted.columns[0]]
-                vendors = df_converted.columns[1:]
+                vendor_cols = df_converted.select_dtypes(include=["number"]).columns.tolist()
+                vendors = vendor_cols
 
                 tab4.caption("")
 
