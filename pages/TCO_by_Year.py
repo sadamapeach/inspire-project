@@ -4,6 +4,7 @@ import numpy as np
 import altair as alt
 import time
 import re
+import io
 from io import BytesIO
 
 def round_half_up(series):
@@ -1198,3 +1199,45 @@ def page():
                     """,
                     unsafe_allow_html=True
                 )
+
+    st.divider()
+
+    # SUPERRR BUTTONN
+    dataframes = {
+        "Merged Overview": merged_overview,
+        "Merge Total": merged_total,
+        # "Converted Total": converted_total,
+        "Filtered Data": df_filtered,
+    }
+
+    # Tampilkan multiselect
+    selected_keys = st.multiselect(
+        "Select dataframes to download:",
+        options=list(dataframes.keys())
+    )
+
+    # Fungsi "Super Button"
+    def generate_multi_sheet_excel(selected_keys, dataframes):
+        output = io.BytesIO()
+
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            for key in selected_keys:
+                df = dataframes[key]
+                # Replace invalid sheet name characters
+                safe_sheet_name = key.replace("/", "_")[:31]
+                df.to_excel(writer, sheet_name=safe_sheet_name, index=False)
+
+        output.seek(0)
+        return output
+    
+    # Download Button
+    if selected_keys:
+        excel_bytes = generate_multi_sheet_excel(selected_keys, dataframes)
+
+        st.download_button(
+            label="⬇️ Download Selected Dataframes",
+            data=excel_bytes,
+            file_name="selected_dataframes.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
