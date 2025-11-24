@@ -75,7 +75,7 @@ def get_excel_download(df, sheet_name="Sheet1"):
 
         # FORMAT
         fmt_number = workbook.add_format({'num_format': '#,##0'})
-        fmt_pct    = workbook.add_format({'num_format': '0.0"%"'})
+        fmt_pct_rupiah   = workbook.add_format({'num_format': '#,##0.0"%"'})
         fmt_bold   = workbook.add_format({'bold': True})
 
         # DETEKSI NUMERIC COLUMNS
@@ -86,7 +86,7 @@ def get_excel_download(df, sheet_name="Sheet1"):
 
             # Percentage columns by name
             if "%" in col_name.upper():
-                worksheet.set_column(col_idx, col_idx, 15, fmt_pct)
+                worksheet.set_column(col_idx, col_idx, 15, fmt_pct_rupiah)
 
             # Numeric columns
             elif col_name in numeric_cols:
@@ -256,24 +256,28 @@ def page():
     st.session_state['result_standard_deviation'] = df_clean
     st.divider()
 
+    # === Identifikasi kolom ===
+    non_num_cols = df_clean.select_dtypes(exclude=["number"]).columns.tolist()
+    vendor_cols = df_clean.select_dtypes(include=["number"]).columns.tolist()
+
     # RANKKK
     st.markdown("##### 🥇 Bidder's Rank")
     st.caption("The bidder ranking process has been successfully completed.")
 
-    vendor_cols = df_clean.columns[1:]          # numeric column vendor (dynamic)
-    df_rank = df_clean[[df_clean.columns[0]]].copy()  # ambil kolom pertama (scope)
+    # Copy non-numeric col
+    df_rank = df_clean[non_num_cols].copy()
+
+    # Hitung rank
     df_rank[vendor_cols] = (
         df_clean[vendor_cols]
         .rank(axis=1, method="min", ascending=True)
-        .astype('Int64')
+        .astype("Int64")
     )
 
     st.dataframe(df_rank, hide_index=True)
 
     # Download
     excel_data = get_excel_download(df_rank)
-
-    # Layout tombol (rata kanan)
     col1, col2, col3 = st.columns([2.3,2,1])
     with col3:
         st.download_button(
@@ -291,11 +295,9 @@ def page():
     st.caption("This table shows each vendor’s price deviation (%) from the lowest-priced (Rank-1) vendor per item.")
 
     min_value = df_clean[vendor_cols].min(axis=1, skipna=True)
-    # Cari vendor dengan nilai minimum
-    best_vendor = df_clean[vendor_cols].idxmin(axis=1, skipna=True)
     
     # Buat dataframe deviasi dalam persentase
-    df_dev = df_clean[[df_clean.columns[0]]].copy()
+    df_dev = df_clean[non_num_cols].copy()
     for col in vendor_cols:
         df_dev[col] = ((df_clean[col] - min_value) / min_value) * 100
 
@@ -316,8 +318,6 @@ def page():
 
     # Download
     excel_data = get_excel_download_highlight(df_dev)
-
-    # Layout tombol (rata kanan)
     col1, col2, col3 = st.columns([2.3,2,1])
     with col3:
         st.download_button(
@@ -334,54 +334,57 @@ def page():
     st.markdown("##### 🌍 Summary Deviation (%)")
     st.caption("This table summarizes vendor rankings and their deviation (%) from the Rank-1 vendor for each item.")
 
-    scope_col = df_clean.columns[0]
-    vendor_cols = df_clean.columns[1:]
-
+    # Ambil kolom utama -> non_num[0]
+    main_col = non_num_cols[0
+                            ]
     # Ubah ke long format
-    df_long = df_clean.melt(id_vars=[scope_col], var_name="Vendor", value_name="Price").dropna(subset=["Price"])
-    df_long["Rank"] = (
-        df_long.groupby(scope_col)["Price"]
-        .rank(method="min", ascending=True)
-    )
+    df_long = df_clean.melt(
+        id_vars=non_num_cols, 
+        var_name="Vendor", 
+        value_name="Price"
+    ).dropna(subset=["Price"])
 
-    def ordinal(n: int) -> str:
-        # Return string like "1st", "2nd", "3rd", "4th", ...
-        if 10 <= (n % 100) <= 20:
-            suffix = "th"
+    # Rank
+    df_long["Rank"] = df_long.groupby(non_num_cols)["Price"].rank(method="min")
+
+    # Fungsi ordinal
+    def ordinal(n):
+        if 10 <= n % 100 <= 20:
+            suf = "th"
         else:
-            suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
-        return f"{n}{suffix}"
+            suf = {1:"st",2:"nd",3:"rd"}.get(n % 10, "th")
+        return f"{n}{suf}"
 
     summary_rows = []
-    for comp, group in df_long.groupby(scope_col):
+
+    # Grouping
+    for keys, group in df_long.groupby(non_num_cols):
         group = group.sort_values("Rank").reset_index(drop=True)
-
-        # safety: skip grouping kalau kosong (guard)
-        if group.shape[0] == 0:
-            continue
-
         base_price = group.loc[0, "Price"]
 
-        row_data = {
-            df_clean.columns[0]: comp,
-            "1st Rank": group.loc[0, "Vendor"],
-            "Best Price": base_price
-        }
+        row_data = {}
 
-        # Tambahkan 2nd, 3rd, dst secara horizontal dengan suffix ordinal
+        # isi semua kolom non-num
+        for i, col in enumerate(non_num_cols):
+            row_data[col] = keys[i]
+
+        row_data["1st Rank"] = group.loc[0, "Vendor"]
+        row_data["Best Price"] = base_price
+
+        # 2nd, 3rd dst
         for i in range(1, len(group)):
-            rank = i + 1  # 2,3,4,...
+            r = i + 1
             vendor = group.loc[i, "Vendor"]
             price = group.loc[i, "Price"]
 
-            # Aman terhadap pembagian nol / NaN
-            if pd.isna(base_price) or base_price == 0:
-                deviation = np.nan
-            else:
-                deviation = ((price - base_price) / base_price) * 100
+            deviation = (
+                ((price - base_price) / base_price) * 100
+                if base_price not in (0, np.nan)
+                else np.nan
+            )
 
-            row_data[f"{ordinal(rank)} Rank"] = vendor
-            row_data[f"Dev. {ordinal(rank)} to 1st (%)"] = deviation
+            row_data[f"{ordinal(r)} Rank"] = vendor
+            row_data[f"Dev. {ordinal(r)} to 1st (%)"] = deviation
 
         summary_rows.append(row_data)
 
@@ -405,8 +408,6 @@ def page():
 
     # Download
     excel_data = get_excel_download(df_summary)
-
-    # Layout tombol (rata kanan)
     col1, col2, col3 = st.columns([2.3,2,1])
     with col3:
         st.download_button(
@@ -420,8 +421,7 @@ def page():
     # VISUALIZATIONN
     st.markdown("##### 📊 Visualization")
 
-    scope_col = df_clean.columns[0]
-    vendor_cols = df_clean.columns[1:]
+    scope_col = non_num_cols[0]
 
     # Tab
     tab_names = df_clean[scope_col].unique()
