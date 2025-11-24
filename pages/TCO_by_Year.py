@@ -173,7 +173,7 @@ def get_excel_download_highlight_1st_2nd_lowest(df, sheet_name="Sheet1"):
 
         # Tentukan format
         format_rupiah_xls = workbook.add_format({'num_format': '#,##0'})
-        format_pct     = workbook.add_format({'num_format': '0.0"%"'})
+        fmt_pct_rupiah   = workbook.add_format({'num_format': '#,##0.0"%"'})
 
         # Terapkan format
         for col_num, col_name in enumerate(df.columns):
@@ -181,7 +181,7 @@ def get_excel_download_highlight_1st_2nd_lowest(df, sheet_name="Sheet1"):
                 worksheet.set_column(col_num, col_num, 15, format_rupiah_xls)
 
             if "%" in col_name:
-                worksheet.set_column(col_num, col_num, 15, format_pct)
+                worksheet.set_column(col_num, col_num, 15, fmt_pct_rupiah)
 
         # --- Format umum ---
         format_first = workbook.add_format({'bg_color': '#C6EFCE', "num_format": "#,##0"})  # hijau Excel-style
@@ -1203,6 +1203,7 @@ def page():
     st.divider()
 
     # SUPERRR BUTTONN
+    st.markdown("##### 🧑‍💻 Super Download — Export Selected Sheets")
     dataframes = {
         "Merged Overview": merged_overview,
         "Merge Total": merged_total,

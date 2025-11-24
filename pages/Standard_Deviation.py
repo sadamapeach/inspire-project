@@ -128,7 +128,7 @@ def get_excel_download_highlight(df, sheet_name="Sheet1"):
         worksheet = writer.sheets[sheet_name]
 
         # Format untuk highlight min value
-        format_pct = workbook.add_format({'num_format': '0.0"%"'})
+        fmt_pct_rupiah   = workbook.add_format({'num_format': '#,##0.0"%"'})
         highlight_format = workbook.add_format({
             "bold": True,
             "bg_color": "#D9EAD3",  # hijau lembut
@@ -139,7 +139,7 @@ def get_excel_download_highlight(df, sheet_name="Sheet1"):
         # Terapkan format
         for col_num, col_name in enumerate(df_to_write.columns):
             if col_name in numeric_cols:
-                worksheet.set_column(col_num, col_num, 15, format_pct)
+                worksheet.set_column(col_num, col_num, 15, fmt_pct_rupiah)
 
         # Iterasi baris (mulai dari baris 1 karena header di baris 0)
         for row_num, row_data in enumerate(df.itertuples(index=False), start=1):
