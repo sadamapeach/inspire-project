@@ -1412,91 +1412,165 @@ def page():
     # GABUNGG SEMUA SCOPE JADI SATU
     tab2.markdown("##### 🧠 Bid & Price Summary Analysis — Scope")
 
-    # Ambil daftar scope dari salah satu vendor (asumsi sama di semua)
-    sample_vendor = next(iter(result.values()))
+    # Hapus kolom "TOTAL" 
+    df_analysis_transpose = df_all_vendors_transposed.drop(columns=["TOTAL"], errors="ignore").copy()
 
-    # Hapus kolom TOTAL kalau ada
-    if "TOTAL" in sample_vendor.columns:
-        sample_vendor = sample_vendor.drop(columns=["TOTAL"])
+    # Identifikasi kolom
+    vendor_col = "VENDOR"
+    
+    non_num_cols = df_analysis_transpose.select_dtypes(exclude=["number"]).columns.tolist()
+    non_num_cols = [c for c in non_num_cols if c != vendor_col]
 
-    num_cols = sample_vendor.select_dtypes(include=["number"]).columns.tolist()
-    non_num_cols = [c for c in sample_vendor.columns if c not in num_cols]
+    first_non_num = non_num_cols[0] # kolom Region
 
-    # non-num pertama = “key”, contoh: Scope
-    first_non_num = non_num_cols[0]          
+    num_cols = df_analysis_transpose.select_dtypes(include=["number"]).columns.tolist()
 
-    # non-num selain key → ikut dibawa (desc, uom, dll)
-    extra_non_num = non_num_cols[1:]         
+    # Hapus row TOTAL
+    first_non_num = non_num_cols[0]
+    df_analysis_transpose = df_analysis_transpose[df_analysis_transpose[first_non_num].astype(str).str.upper() != "TOTAL"].copy()
 
-    # Scope list = semua kolom numeric
-    scope_cols = num_cols                    
+    # Unpivot
+    df_long = df_analysis_transpose.melt(
+        id_vars=[vendor_col] + non_num_cols,
+        value_vars=num_cols,
+        var_name="SCOPE",
+        value_name="VALUE"
+    )
 
-    all_scopes_combined = []
+    # Drop rows tanpa nilai
+    df_long = df_long.dropna(subset=["VALUE"]).copy()
 
-    for scope in scope_cols:
-        df_scope = pd.DataFrame()
-        ref_order = None
-
-        for j, (vendor, df_vendor) in enumerate(result.items()):
-            # Ambil semua non-num + kolom scope tertentu
-            df_temp = df_vendor[non_num_cols + [scope]].copy()
-            df_temp.rename(columns={scope: vendor}, inplace=True)
-
-            if j == 0:
-                ref_order = df_temp[first_non_num].tolist()
-                df_scope = df_temp
-            else:
-                df_scope = df_scope.merge(df_temp, on=non_num_cols, how="outer")
-
-        # Urutkan mengikuti vendor pertama
-        if ref_order is not None:
-            df_scope[first_non_num] = pd.Categorical(df_scope[first_non_num],
-                                                    categories=ref_order,
-                                                    ordered=True)
-            df_scope = df_scope.sort_values(first_non_num).reset_index(drop=True)
-
-        # Hitung metrik seperti sebelumnya
-        vendor_cols = [c for c in df_scope.columns if c not in non_num_cols]
-
-        # 1st lowest
-        df_scope["1st Lowest"] = df_scope[vendor_cols].min(axis=1, numeric_only=True)
-        df_scope["1st Vendor"] = df_scope[vendor_cols].idxmin(axis=1)
-
-        # 2nd lowest
-        df_scope["2nd Lowest"] = df_scope[vendor_cols].apply(
-            lambda row: row.nsmallest(2).iloc[-1]
-            if row.count() >= 2 else None,
-            axis=1
+    # Pivot
+    df_all_scopes = (
+        df_long.pivot_table(
+            index=["SCOPE"] + non_num_cols,
+            columns=vendor_col,
+            values="VALUE",
+            aggfunc="sum",
+            fill_value=0
         )
-        df_scope["2nd Vendor"] = df_scope.apply(
-            lambda row: next((col for col in vendor_cols
-                            if row[col] == row["2nd Lowest"]), None),
-            axis=1
-        )
+        .reset_index()
+    )
 
-        # GAP %
-        df_scope["Gap 1 to 2 (%)"] = (
-            (df_scope["2nd Lowest"] - df_scope["1st Lowest"]) /
-            df_scope["1st Lowest"] * 100
-        ).round(1)
+    # Kolom vendor dinamis
+    vendor_cols = df_all_scopes.columns[len(["SCOPE"] + non_num_cols):]
 
-        # Median
-        df_scope["Median Price"] = df_scope[vendor_cols].median(axis=1)
+    # 1st & 2nd Lowest
+    df_all_scopes["1st Lowest"] = df_all_scopes[vendor_cols].min(axis=1)
+    df_all_scopes["1st Vendor"] = df_all_scopes[vendor_cols].idxmin(axis=1)
 
-        # Vendor → median (%)
-        for v in vendor_cols:
-            df_scope[f"{v} to Median (%)"] = (
-                (df_scope[v] - df_scope["Median Price"]) /
-                df_scope["Median Price"] * 100
-            ).round(1)
+    df_all_scopes["2nd Lowest"] = df_all_scopes[vendor_cols].apply(
+        lambda row: row.nsmallest(2).iloc[-1] if len(row.dropna()) >= 2 else np.nan,
+        axis=1
+    )
 
-        # Tambah kolom nama scope (fix)
-        df_scope.insert(0, "SCOPE", scope)
+    df_all_scopes["2nd Vendor"] = df_all_scopes[vendor_cols].apply(
+        lambda row: row.nsmallest(2).index[-1] if len(row.dropna()) >= 2 else "",
+        axis=1
+    )
 
-        all_scopes_combined.append(df_scope)
+    # Gap (%)
+    df_all_scopes["Gap 1 to 2 (%)"] = (
+        (df_all_scopes["2nd Lowest"] - df_all_scopes["1st Lowest"]) / df_all_scopes["1st Lowest"] * 100
+    ).round(2)
 
-    # Gabungkan semua scope jadi satu DataFrame besar
-    df_all_scopes = pd.concat(all_scopes_combined, ignore_index=True)
+    # Median Price
+    df_all_scopes["Median Price"] = df_all_scopes[vendor_cols].median(axis=1)
+
+    # Vendor -> Median (%)
+    for v in vendor_cols:
+        df_all_scopes[f"{v} to Median (%)"] = (
+            (df_all_scopes[v] - df_all_scopes["Median Price"]) / df_all_scopes["Median Price"] * 100
+        ).round(2)
+
+    # Simpan ke session state
+    st.session_state["bid_and_price_analysis_transposed_tco_by_region"] = df_all_scopes
+
+    # # Ambil daftar scope dari salah satu vendor (asumsi sama di semua)
+    # sample_vendor = next(iter(result.values()))
+
+    # # Hapus kolom TOTAL kalau ada
+    # if "TOTAL" in sample_vendor.columns:
+    #     sample_vendor = sample_vendor.drop(columns=["TOTAL"])
+
+    # num_cols = sample_vendor.select_dtypes(include=["number"]).columns.tolist()
+    # non_num_cols = [c for c in sample_vendor.columns if c not in num_cols]
+
+    # # non-num pertama = “key”, contoh: Scope
+    # first_non_num = non_num_cols[0]          
+
+    # # non-num selain key → ikut dibawa (desc, uom, dll)
+    # extra_non_num = non_num_cols[1:]         
+
+    # # Scope list = semua kolom numeric
+    # scope_cols = num_cols                    
+
+    # all_scopes_combined = []
+
+    # for scope in scope_cols:
+    #     df_scope = pd.DataFrame()
+    #     ref_order = None
+
+    #     for j, (vendor, df_vendor) in enumerate(result.items()):
+    #         # Ambil semua non-num + kolom scope tertentu
+    #         df_temp = df_vendor[non_num_cols + [scope]].copy()
+    #         df_temp.rename(columns={scope: vendor}, inplace=True)
+
+    #         if j == 0:
+    #             ref_order = df_temp[first_non_num].tolist()
+    #             df_scope = df_temp
+    #         else:
+    #             df_scope = df_scope.merge(df_temp, on=non_num_cols, how="outer")
+
+    #     # Urutkan mengikuti vendor pertama
+    #     if ref_order is not None:
+    #         df_scope[first_non_num] = pd.Categorical(df_scope[first_non_num],
+    #                                                 categories=ref_order,
+    #                                                 ordered=True)
+    #         df_scope = df_scope.sort_values(first_non_num).reset_index(drop=True)
+
+    #     # Hitung metrik seperti sebelumnya
+    #     vendor_cols = [c for c in df_scope.columns if c not in non_num_cols]
+
+    #     # 1st lowest
+    #     df_scope["1st Lowest"] = df_scope[vendor_cols].min(axis=1, numeric_only=True)
+    #     df_scope["1st Vendor"] = df_scope[vendor_cols].idxmin(axis=1)
+
+    #     # 2nd lowest
+    #     df_scope["2nd Lowest"] = df_scope[vendor_cols].apply(
+    #         lambda row: row.nsmallest(2).iloc[-1]
+    #         if row.count() >= 2 else None,
+    #         axis=1
+    #     )
+    #     df_scope["2nd Vendor"] = df_scope.apply(
+    #         lambda row: next((col for col in vendor_cols
+    #                         if row[col] == row["2nd Lowest"]), None),
+    #         axis=1
+    #     )
+
+    #     # GAP %
+    #     df_scope["Gap 1 to 2 (%)"] = (
+    #         (df_scope["2nd Lowest"] - df_scope["1st Lowest"]) /
+    #         df_scope["1st Lowest"] * 100
+    #     ).round(1)
+
+    #     # Median
+    #     df_scope["Median Price"] = df_scope[vendor_cols].median(axis=1)
+
+    #     # Vendor → median (%)
+    #     for v in vendor_cols:
+    #         df_scope[f"{v} to Median (%)"] = (
+    #             (df_scope[v] - df_scope["Median Price"]) /
+    #             df_scope["Median Price"] * 100
+    #         ).round(1)
+
+    #     # Tambah kolom nama scope (fix)
+    #     df_scope.insert(0, "SCOPE", scope)
+
+    #     all_scopes_combined.append(df_scope)
+
+    # # Gabungkan semua scope jadi satu DataFrame besar
+    # df_all_scopes = pd.concat(all_scopes_combined, ignore_index=True)
 
     # --- 🎯 Tambahkan slicer
     all_scope = sorted(df_all_scopes["SCOPE"].dropna().unique())
