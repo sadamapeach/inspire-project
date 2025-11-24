@@ -328,24 +328,24 @@ def page():
         merged_df.append(df_temp)
 
     # Gabungkan jadi satu dataframe
-    df_all_vendors = pd.concat(merged_df, ignore_index=True)
+    df_merge = pd.concat(merged_df, ignore_index=True)
 
     # Simpan ke session_state jika perlu digunakan di halaman lain
-    st.session_state["merged_all_data_tco_by_region"] = df_all_vendors
+    st.session_state["merged_all_data_tco_by_region"] = df_merge
 
     # Format Rupiah
-    num_cols = df_all_vendors.select_dtypes(include=["number"]).columns
-    df_all_vendors_styled = (
-        df_all_vendors.style
+    num_cols = df_merge.select_dtypes(include=["number"]).columns
+    df_merge_styled = (
+        df_merge.style
         .format({col: format_rupiah for col in num_cols})
         .apply(highlight_total_row_v2, axis=1)
     )
 
-    tab1.caption(f"Data from **{total_sheets} vendors** have been successfully consolidated, analyzing a total of **{len(df_all_vendors):,} combined records**.")
-    tab1.dataframe(df_all_vendors_styled, hide_index=True)
+    tab1.caption(f"Data from **{total_sheets} vendors** have been successfully consolidated, analyzing a total of **{len(df_merge):,} combined records**.")
+    tab1.dataframe(df_merge_styled, hide_index=True)
 
     # Download button to Excel
-    excel_data = get_excel_download_highlight_total(df_all_vendors, sheet_name="Merge Original Data")
+    excel_data = get_excel_download_highlight_total(df_merge)
 
     with tab1:
         # Layout tombol (rata kanan)
@@ -354,7 +354,7 @@ def page():
             st.download_button(
                 label="Download",
                 data=excel_data,
-                file_name="Merged_All_Dataset.xlsx",
+                file_name="Merge Data - TCO by Region.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 icon=":material/download:",
             )
@@ -365,7 +365,7 @@ def page():
     tab1.markdown("##### 💸 TCO Summary — Scope")
     tab1.caption("The following table presents the TCO summary across all scopes.")
 
-    df = df_all_vendors.drop(columns=["TOTAL"], errors="ignore").copy()
+    df = df_merge.drop(columns=["TOTAL"], errors="ignore").copy()
 
     # Identifikasi kolom
     vendor_col = "VENDOR"
@@ -384,7 +384,7 @@ def page():
     df["SUM_REGION"] = df[num_cols].sum(axis=1)
 
     # Pivot: non-num cols + ven. A + ven. B
-    tco_summary = (
+    df_tco = (
         df.pivot_table(
             index=non_num_cols,
             columns=vendor_col,
@@ -396,30 +396,30 @@ def page():
     )
 
     # Tambahkan baris TOTAL
-    vendor_cols = tco_summary.columns[len(non_num_cols):]
+    vendor_cols = df_tco.columns[len(non_num_cols):]
 
-    total_row = {col: "" for col in tco_summary.columns}
+    total_row = {col: "" for col in df_tco.columns}
     total_row[first_non_num] = "TOTAL"
 
     for v in vendor_cols:
-        total_row[v] = tco_summary[v].sum()
+        total_row[v] = df_tco[v].sum()
 
-    tco_summary = pd.concat([tco_summary, pd.DataFrame([total_row])], ignore_index=True)
+    df_tco = pd.concat([df_tco, pd.DataFrame([total_row])], ignore_index=True)
 
     # Fomat Rupiah & fungsi untuk styling baris TOTAL
-    num_cols = tco_summary.select_dtypes(include=["number"]).columns
+    num_cols = df_tco.select_dtypes(include=["number"]).columns
 
-    merged_tco_styled = (
-        tco_summary.style
+    df_tco_styled = (
+        df_tco.style
         .format({col: format_rupiah for col in num_cols})
         .apply(highlight_total_row_v2, axis=1)
     )
 
-    st.session_state["merged_tco_by_region"] = tco_summary
-    tab1.dataframe(merged_tco_styled, hide_index=True)
+    st.session_state["df_tco_by_region"] = df_tco
+    tab1.dataframe(df_tco_styled, hide_index=True)
 
     # Download button to Excel
-    excel_data = get_excel_download_highlight_total(tco_summary)
+    excel_data = get_excel_download_highlight_total(df_tco)
 
     with tab1:
         # Layout tombol (rata kanan)
@@ -428,165 +428,35 @@ def page():
             st.download_button(
                 label="Download",
                 data=excel_data,
-                file_name="Merged_TCO_Region.xlsx",
+                file_name="TCO Summary - TCO by Region.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 icon=":material/download:",
             )
 
-    # st.divider()
-
-    # REGIONN -> SCOPE COMPARISONN
-    # tab1.markdown("##### 🧠 Bid & Price Analysis — Scope")
-
-    # # Ambil daftar region dari salah satu vendor (asumsi sama di semua)
-    # sample_vendor = next(iter(result.values()))
-    # region_cols = sample_vendor.columns[1:-1]  # exclude Scope & Total
-
-    # # Loop per Region
-    # tabs = tab1.tabs(region_cols.tolist())
-
-    # for i, region in enumerate(region_cols):
-    #     with tabs[i]:
-    #         df_region = pd.DataFrame()
-    #         ref_order = None  # simpan urutan scope vendor pertama
-
-    #         # Ambil kolom region dari semua vendor
-    #         for j, (vendor, df_vendor) in enumerate(result.items()):
-    #             scope_col = df_vendor.columns[0]
-    #             df_temp = df_vendor[[scope_col, region]].copy()
-    #             df_temp.rename(columns={region: f"{vendor}"}, inplace=True)
-
-    #             # Simpan urutan scope vendor pertama
-    #             if j == 0:
-    #                 ref_order = df_temp[scope_col].tolist()
-    #                 df_region = df_temp
-    #             else:
-    #                 df_region = df_region.merge(df_temp, on=scope_col, how="outer")
-
-    #         # Reorder kembali sesuai urutan vendor pertama
-    #         if ref_order is not None:
-    #             df_region[scope_col] = pd.Categorical(df_region[scope_col], categories=ref_order, ordered=True)
-    #             df_region = df_region.sort_values(scope_col).reset_index(drop=True)
-
-    #         # --- Hitung ranking harga per baris ---
-    #         vendor_cols = [c for c in df_region.columns if c != scope_col]
-    #         df_region["1st Lowest"] = df_region[vendor_cols].min(axis=1, numeric_only=True)
-    #         df_region["1st Vendor"] = df_region[vendor_cols].idxmin(axis=1)
-    #         df_region["2nd Lowest"] = df_region[vendor_cols].apply(
-    #             lambda row: sorted([v for v in row if pd.notna(v)])[1]
-    #             if len([v for v in row if pd.notna(v)]) > 1
-    #             else None,
-    #             axis=1,
-    #         )
-    #         df_region["2nd Vendor"] = df_region.apply(
-    #             lambda row: next(
-    #                 (col for col in vendor_cols if row[col] == row["2nd Lowest"]), None
-    #             ),
-    #             axis=1,
-    #         )
-
-    #         # Gap 1 to 2 (%)
-    #         df_region["Gap 1 to 2 (%)"] = (
-    #             (df_region["2nd Lowest"] - df_region["1st Lowest"]) / df_region["1st Lowest"] * 100
-    #         ).round(1)
-
-    #         # --- Hitung Median & Deviasi ---
-    #         df_region["Median Price"] = df_region[vendor_cols].median(axis=1, numeric_only=True)
-    #         for vendor in vendor_cols:
-    #             df_region[f"{vendor} to Median (%)"] = (
-    #                 (df_region[vendor] - df_region["Median Price"]) / df_region["Median Price"] * 100
-    #             ).round(1)
-
-    #         # --- 🎯 Tambahkan dua slicer terpisah untuk 1st Vendor dan 2nd Vendor
-    #         all_1st = sorted(df_region["1st Vendor"].dropna().unique())
-    #         all_2nd = sorted(df_region["2nd Vendor"].dropna().unique())
-
-    #         col_sel_1, col_sel_2 = st.columns(2)
-    #         with col_sel_1:
-    #             selected_1st = st.multiselect(
-    #                 "Filter: 1st vendor",
-    #                 options=all_1st,
-    #                 default=None,
-    #                 placeholder="Choose one or more vendors",
-    #                 key=f"filter_1st_vendor_{region}"
-    #             )
-    #         with col_sel_2:
-    #             selected_2nd = st.multiselect(
-    #                 "Filter: 2nd vendor",
-    #                 options=all_2nd,
-    #                 default=None,
-    #                 placeholder="Choose one or more vendors",
-    #                 key=f"filter_2nd_vendor_{region}"
-    #             )
-
-    #         # --- Terapkan filter dengan logika AND
-    #         if selected_1st and selected_2nd:
-    #             df_filtered = df_region[
-    #                 df_region["1st Vendor"].isin(selected_1st) &
-    #                 df_region["2nd Vendor"].isin(selected_2nd)
-    #             ]
-    #         elif selected_1st:
-    #             df_filtered = df_region[df_region["1st Vendor"].isin(selected_1st)]
-    #         elif selected_2nd:
-    #             df_filtered = df_region[df_region["2nd Vendor"].isin(selected_2nd)]
-    #         else:
-    #             df_filtered = df_region.copy()
-
-    #         # --- Format rupiah & persentase hanya untuk df_filtered
-    #         num_cols = df_filtered.select_dtypes(include=["number"]).columns
-    #         format_dict = {col: format_rupiah for col in num_cols}
-    #         format_dict.update({"Gap 1 to 2 (%)": "{:.1f}%"})
-    #         for v in vendor_cols:
-    #             format_dict[f"{v} to Median (%)"] = "{:+.1f}%"
-
-    #         df_styled = (
-    #             df_filtered.style
-    #             .format(format_dict)
-    #             .apply(lambda row: highlight_1st_2nd_vendor(row, df_filtered.columns), axis=1)
-    #         )
-
-    #         st.caption(f"✨ Total number of data entries: **{len(df_filtered)}**")
-    #         st.dataframe(df_styled, hide_index=True)
-
-    #         # Simpan hasil ke variabel
-    #         excel_data = get_excel_download_highlight_1st_2nd_lowest(df_filtered, sheet_name="Regional Comparison")
-
-    #         # Layout tombol (rata kanan)
-    #         col1, col2, col3 = st.columns([2.3,2,1])
-    #         with col3:
-    #             st.download_button(
-    #                 label="Download",
-    #                 data=excel_data,
-    #                 file_name=f"Regional Comparison - {region}.xlsx",
-    #                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    #                 icon=":material/download:",
-    #                 key=f"download_regional_{region}_comparison"  # unik per tab
-    #             )
-
-    # tab1.divider()
+    tab1.divider()
     
     # GABUNGG SEMUA REGION JADI SATUU
     tab1.markdown("##### 🧠 Bid & Price Summary Analysis — Region")
 
     # Hapus kolom "TOTAL" 
-    df_analysis = df_all_vendors.drop(columns=["TOTAL"], errors="ignore").copy()
+    df_raw_analysis = df_merge.drop(columns=["TOTAL"], errors="ignore").copy()
 
     # Identifikasi kolom
     vendor_col = "VENDOR"
     
-    non_num_cols = df_analysis.select_dtypes(exclude=["number"]).columns.tolist()
+    non_num_cols = df_raw_analysis.select_dtypes(exclude=["number"]).columns.tolist()
     non_num_cols = [c for c in non_num_cols if c != vendor_col]
 
     first_non_num = non_num_cols[0] # kolom Scope
 
-    num_cols = df_analysis.select_dtypes(include=["number"]).columns.tolist()
+    num_cols = df_raw_analysis.select_dtypes(include=["number"]).columns.tolist()
 
     # Hapus row TOTAL
     first_non_num = non_num_cols[0]
-    df_analysis = df_analysis[df_analysis[first_non_num].astype(str).str.upper() != "TOTAL"].copy()
+    df_raw_analysis = df_raw_analysis[df_raw_analysis[first_non_num].astype(str).str.upper() != "TOTAL"].copy()
 
     # Unpivot
-    df_long = df_analysis.melt(
+    df_long = df_raw_analysis.melt(
         id_vars=[vendor_col] + non_num_cols,
         value_vars=num_cols,
         var_name="REGION",
@@ -597,7 +467,7 @@ def page():
     df_long = df_long.dropna(subset=["VALUE"]).copy()
 
     # Pivot
-    df_all_regions = (
+    df_analysis = (
         df_long.pivot_table(
             index=["REGION"] + non_num_cols,
             columns=vendor_col,
@@ -609,44 +479,44 @@ def page():
     )
 
     # Kolom vendor dinamis
-    vendor_cols = df_all_regions.columns[len(["REGION"] + non_num_cols):]
+    vendor_cols = df_analysis.columns[len(["REGION"] + non_num_cols):]
 
     # 1st & 2nd Lowest
-    df_all_regions["1st Lowest"] = df_all_regions[vendor_cols].min(axis=1)
-    df_all_regions["1st Vendor"] = df_all_regions[vendor_cols].idxmin(axis=1)
+    df_analysis["1st Lowest"] = df_analysis[vendor_cols].min(axis=1)
+    df_analysis["1st Vendor"] = df_analysis[vendor_cols].idxmin(axis=1)
 
-    df_all_regions["2nd Lowest"] = df_all_regions[vendor_cols].apply(
+    df_analysis["2nd Lowest"] = df_analysis[vendor_cols].apply(
         lambda row: row.nsmallest(2).iloc[-1] if len(row.dropna()) >= 2 else np.nan,
         axis=1
     )
 
-    df_all_regions["2nd Vendor"] = df_all_regions[vendor_cols].apply(
+    df_analysis["2nd Vendor"] = df_analysis[vendor_cols].apply(
         lambda row: row.nsmallest(2).index[-1] if len(row.dropna()) >= 2 else "",
         axis=1
     )
 
     # Gap (%)
-    df_all_regions["Gap 1 to 2 (%)"] = (
-        (df_all_regions["2nd Lowest"] - df_all_regions["1st Lowest"]) / df_all_regions["1st Lowest"] * 100
+    df_analysis["Gap 1 to 2 (%)"] = (
+        (df_analysis["2nd Lowest"] - df_analysis["1st Lowest"]) / df_analysis["1st Lowest"] * 100
     ).round(2)
 
     # Median Price
-    df_all_regions["Median Price"] = df_all_regions[vendor_cols].median(axis=1)
+    df_analysis["Median Price"] = df_analysis[vendor_cols].median(axis=1)
 
     # Vendor -> Median (%)
     for v in vendor_cols:
-        df_all_regions[f"{v} to Median (%)"] = (
-            (df_all_regions[v] - df_all_regions["Median Price"]) / df_all_regions["Median Price"] * 100
+        df_analysis[f"{v} to Median (%)"] = (
+            (df_analysis[v] - df_analysis["Median Price"]) / df_analysis["Median Price"] * 100
         ).round(2)
 
     # Simpan ke session state
-    st.session_state["bid_and_price_analysis_tco_by_region"] = df_all_regions
+    st.session_state["bid_and_price_analysis_tco_by_region"] = df_analysis
 
     # --- 🎯 Tambahkan slicer
-    all_region = sorted(df_all_regions["REGION"].dropna().unique())
-    all_scope = sorted(df_all_regions[first_non_num].dropna().unique())
-    all_1st = sorted(df_all_regions["1st Vendor"].dropna().unique())
-    all_2nd = sorted(df_all_regions["2nd Vendor"].dropna().unique())
+    all_region = sorted(df_analysis["REGION"].dropna().unique())
+    all_scope = sorted(df_analysis[first_non_num].dropna().unique())
+    all_1st = sorted(df_analysis["1st Vendor"].dropna().unique())
+    all_2nd = sorted(df_analysis["2nd Vendor"].dropna().unique())
 
     with tab1:
         col_sel_1, col_sel_2, col_sel_3, col_sel_4 = st.columns(4)
@@ -684,38 +554,38 @@ def page():
             )
 
         # --- Terapkan filter AND secara dinamis
-        df_filtered_region = df_all_regions.copy()
+        df_filtered_analysis = df_analysis.copy()
 
         if selected_region:
-            df_filtered_region = df_filtered_region[df_filtered_region["REGION"].isin(selected_region)]
+            df_filtered_analysis = df_filtered_analysis[df_filtered_analysis["REGION"].isin(selected_region)]
 
         if selected_scope:
-            df_filtered_region = df_filtered_region[df_filtered_region[first_non_num].isin(selected_scope)]
+            df_filtered_analysis = df_filtered_analysis[df_filtered_analysis[first_non_num].isin(selected_scope)]
 
         if selected_1st:
-            df_filtered_region = df_filtered_region[df_filtered_region["1st Vendor"].isin(selected_1st)]
+            df_filtered_analysis = df_filtered_analysis[df_filtered_analysis["1st Vendor"].isin(selected_1st)]
 
         if selected_2nd:
-            df_filtered_region = df_filtered_region[df_filtered_region["2nd Vendor"].isin(selected_2nd)]
+            df_filtered_analysis = df_filtered_analysis[df_filtered_analysis["2nd Vendor"].isin(selected_2nd)]
 
     # --- Styling (Rupiah & Persen) ---
-    num_cols = df_filtered_region.select_dtypes(include=["number"]).columns
+    num_cols = df_filtered_analysis.select_dtypes(include=["number"]).columns
     format_dict = {col: format_rupiah for col in num_cols}
     format_dict.update({"Gap 1 to 2 (%)": "{:.1f}%"})
     for vendor in vendor_cols:
         format_dict[f"{vendor} to Median (%)"] = "{:+.1f}%"
 
-    df_filtered_region_styled = (
-        df_filtered_region.style
+    df_filtered_analysis_styled = (
+        df_filtered_analysis.style
         .format(format_dict)
-        .apply(lambda row: highlight_1st_2nd_vendor(row, df_filtered_region.columns), axis=1)
+        .apply(lambda row: highlight_1st_2nd_vendor(row, df_filtered_analysis.columns), axis=1)
     )
 
     # --- Tampilkan di Streamlit ---
-    tab1.caption(f"✨ Total number of data entries: **{len(df_filtered_region)}**")
-    tab1.dataframe(df_filtered_region_styled, hide_index=True)
+    tab1.caption(f"✨ Total number of data entries: **{len(df_filtered_analysis)}**")
+    tab1.dataframe(df_filtered_analysis_styled, hide_index=True)
 
-    excel_data = get_excel_download_highlight_1st_2nd_lowest(df_filtered_region)
+    excel_data = get_excel_download_highlight_1st_2nd_lowest(df_filtered_analysis)
     with tab1:
         # --- Optional: tombol download ---
         col1, col2, col3 = st.columns([2.3,2,1])
@@ -723,7 +593,7 @@ def page():
             st.download_button(
                 label="Download",
                 data=excel_data,
-                file_name="Regional Comparison - ALL.xlsx",
+                file_name="Bid & Price Analysis - TCO by Region.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 icon=":material/download:",
             )
@@ -737,15 +607,15 @@ def page():
         with subtab1:
             # --- WIN RATE VISUALIZATION ---
             # --- Hitung total kemenangan (1st & 2nd Vendor)
-            win1_counts = df_all_regions["1st Vendor"].value_counts(dropna=True).reset_index()
+            win1_counts = df_analysis["1st Vendor"].value_counts(dropna=True).reset_index()
             win1_counts.columns = ["Vendor", "Wins1"]
 
-            win2_counts = df_all_regions["2nd Vendor"].value_counts(dropna=True).reset_index()
+            win2_counts = df_analysis["2nd Vendor"].value_counts(dropna=True).reset_index()
             win2_counts.columns = ["Vendor", "Wins2"]
 
             # --- Hitung total partisipasi vendor ---
             vendor_counts = (
-                df_all_regions[vendor_cols]
+                df_analysis[vendor_cols]
                 .notna()       # True kalau vendor berpartisipasi (ada harga)
                 .sum()         # Hitung True per kolom
                 .reset_index()
@@ -926,7 +796,7 @@ def page():
         with subtab2:
             # --- AVERAGE GAP VISUALIZATION ---
             # --- Hitung rata-rata Gap 1 to 2 (%) per Vendor (hanya untuk 1st Vendor)
-            df_gap = df_all_regions.copy()
+            df_gap = df_analysis.copy()
 
             # Ubah kolom 'Gap 1 to 2 (%)' ke numerik (hapus simbol %)
             df_gap["Gap 1 to 2 (%)"] = (
@@ -1034,6 +904,117 @@ def page():
                     
                     The dashed line represents the average gap across all vendors, serving as a benchmark ({avg_value:.1f}%).
                 ''')
+
+    tab1.divider()
+
+    # SUPERRR BUTTOONNN 1
+    tab1.markdown("##### 🧑‍💻 Super Download — Export Selected Sheets")
+    dataframes = {
+        "Merge Data": df_merge,
+        "TCO Summary": df_tco,
+        "Bid & Price Analysis": df_filtered_analysis,
+    }
+
+    # Tampilkan multiselect
+    selected_sheets = tab1.multiselect(
+        "Select sheets to download in a single Excel file:",
+        options=list(dataframes.keys()),
+        default=list(dataframes.keys())  # default semua dipilih
+    )
+
+    # Fungsi "Super Button" & Formatting
+    def generate_multi_sheet_excel(selected_sheets, df_dict):
+        """
+        Buat Excel multi-sheet dengan highlight:
+        - Sheet 'Bid & Price Analysis' -> highlight 1st & 2nd vendor
+        - Sheet lainnya -> highlight row TOTAL
+        """
+        output = BytesIO()
+
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            for sheet in selected_sheets:
+                df = df_dict[sheet].copy()
+                df.to_excel(writer, index=False, sheet_name=sheet)
+                workbook  = writer.book
+                worksheet = writer.sheets[sheet]
+
+                # --- Format umum ---
+                fmt_rupiah = workbook.add_format({'num_format': '#,##0'})
+                fmt_pct    = workbook.add_format({'num_format': '#,##0.0"%"'})
+                fmt_total  = workbook.add_format({
+                    "bold": True, "bg_color": "#D9EAD3", "font_color": "#1A5E20", "num_format": "#,##0"
+                })
+                fmt_first  = workbook.add_format({'bg_color': '#C6EFCE', "num_format": "#,##0"})
+                fmt_second = workbook.add_format({'bg_color': '#FFEB9C', "num_format": "#,##0"})
+
+                # Identifikasi numeric columns
+                numeric_cols = df.select_dtypes(include=["number"]).columns.tolist()
+                vendor_cols = [c for c in numeric_cols] if sheet == "Bid & Price Analysis" else []
+
+                # Apply format kolom numeric / persen
+                for col_idx, col_name in enumerate(df.columns):
+                    if col_name in numeric_cols:
+                        worksheet.set_column(col_idx, col_idx, 15, fmt_rupiah)
+                    if "%" in col_name:
+                        worksheet.set_column(col_idx, col_idx, 15, fmt_pct)
+
+                # --- Highlight baris ---
+                for row_idx, row in enumerate(df.itertuples(index=False), start=1):
+                    # Cek apakah TOTAL
+                    is_total_row = any(str(x).strip().upper() == "TOTAL" for x in row if pd.notna(x))
+
+                    # Ambil nama 1st & 2nd vendor untuk sheet Bid & Price Analysis
+                    if sheet == "Bid & Price Analysis":
+                        first_vendor_name = row[df.columns.get_loc("1st Vendor")]
+                        second_vendor_name = row[df.columns.get_loc("2nd Vendor")]
+
+                        # Cari index kolom vendor di vendor_cols
+                        first_idx = df.columns.get_loc(first_vendor_name) if first_vendor_name in vendor_cols else None
+                        second_idx = df.columns.get_loc(second_vendor_name) if second_vendor_name in vendor_cols else None
+
+                    # Loop tiap kolom
+                    for col_idx, col_name in enumerate(df.columns):
+                        value = row[col_idx]
+                        fmt = None
+
+                        # Highlight TOTAL untuk sheet selain Bid & Price Analysis
+                        if is_total_row and sheet in ["Merge Data", "TCO Summary"]:
+                            fmt = fmt_total
+
+                        # Highlight 1st/2nd vendor
+                        elif sheet == "Bid & Price Analysis":
+                            if first_idx is not None and col_idx == first_idx:
+                                fmt = fmt_first
+                            elif second_idx is not None and col_idx == second_idx:
+                                fmt = fmt_second
+
+                        # Tangani NaN / None / inf
+                        if pd.isna(value) or (isinstance(value, (int, float)) and np.isinf(value)):
+                            value = ""
+
+                        worksheet.write(row_idx, col_idx, value, fmt)
+
+        output.seek(0)
+        return output
+
+    # --- FRAGMENT UNTUK BALLOONS ---
+    @st.fragment
+    def release_the_balloons():
+        tab1.balloons()
+
+    # ---- DOWNLOAD BUTTON ----
+    if selected_sheets:
+        excel_bytes = generate_multi_sheet_excel(selected_sheets, dataframes)
+
+        tab1.download_button(
+            label="Download",
+            data=excel_bytes,
+            file_name="TCO Comparison by Region - Original Data.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            on_click=release_the_balloons,
+            type="primary",
+            use_container_width=True,
+        )
 
     # TRANSPOSE
     # tab2.markdown("##### 🛸 Transpose Data")
@@ -1145,7 +1126,7 @@ def page():
     tab2.markdown("##### 🗃️ Merge Transposed")
 
     # --- Merge all vendor data into one DataFrame ---
-    merged_df_transposed = []
+    df_merge_transposed = []
 
     for vendor_name, df_vendor in result.items():
         df_temp = df_vendor.copy()
@@ -1170,27 +1151,27 @@ def page():
         # Tambahkan kolom vendor paling depan
         df_temp.insert(0, "VENDOR", vendor_name)
 
-        merged_df_transposed.append(df_temp)
+        df_merge_transposed.append(df_temp)
 
     # Gabungkan jadi satu dataframe
-    df_all_vendors_transposed = pd.concat(merged_df_transposed, ignore_index=True)
+    df_merge_transposed = pd.concat(df_merge_transposed, ignore_index=True)
 
     # Simpan ke session_state jika perlu digunakan di halaman lain
-    st.session_state["merged_all_data_transposed_tco_by_region"] = df_all_vendors_transposed
+    st.session_state["merged_all_data_transposed_tco_by_region"] = df_merge_transposed
 
     # Format Rupiah
-    num_cols = df_all_vendors_transposed.select_dtypes(include=["number"]).columns
-    df_all_vendors_transposed_styled = (
-        df_all_vendors_transposed.style
+    num_cols = df_merge_transposed.select_dtypes(include=["number"]).columns
+    df_merge_transposed_styled = (
+        df_merge_transposed.style
         .format({col: format_rupiah for col in num_cols})
         .apply(highlight_total_row_v2, axis=1)
     )
 
-    tab2.caption(f"Data from **{total_sheets} vendors** have been successfully consolidated, analyzing a total of **{len(df_all_vendors_transposed):,} combined records**.")
-    tab2.dataframe(df_all_vendors_transposed_styled, hide_index=True)
+    tab2.caption(f"Data from **{total_sheets} vendors** have been successfully consolidated, analyzing a total of **{len(df_merge_transposed):,} combined records**.")
+    tab2.dataframe(df_merge_transposed_styled, hide_index=True)
 
     # Download button to Excel
-    excel_data = get_excel_download_highlight_total(df_all_vendors_transposed)
+    excel_data = get_excel_download_highlight_total(df_merge_transposed)
 
     with tab2:
         # Layout tombol (rata kanan)
@@ -1199,7 +1180,7 @@ def page():
             st.download_button(
                 label="Download",
                 data=excel_data,
-                file_name="Merged_All_Transposed_Dataset.xlsx",
+                file_name="Merge Transposed - TCO by Region.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 icon=":material/download:",
             )
@@ -1211,7 +1192,7 @@ def page():
     tab2.caption(f"The following table presents the TCO summary across all regions.")
     
     # Hapus kolom & row "TOTAL"
-    df = df_all_vendors_transposed.drop(columns=["TOTAL"], errors="ignore").copy()
+    df = df_merge_transposed.drop(columns=["TOTAL"], errors="ignore").copy()
     df = df[df["REGION"].astype(str).str.upper() != "TOTAL"].copy()
 
     # Identifikasi kolom
@@ -1229,7 +1210,7 @@ def page():
     df["SUM_SCOPE"] = df[scope_cols].sum(axis=1)
 
     # Pivot
-    tco_summary_transposed = (
+    df_tco_transposed = (
         df.pivot_table(
             index=[region_col] + non_num_cols,
             columns=vendor_col,
@@ -1241,31 +1222,31 @@ def page():
     )
 
     # Ambil daftar vendor
-    vendor_list = tco_summary_transposed.columns[len([region_col] + non_num_cols):]
+    vendor_list = df_tco_transposed.columns[len([region_col] + non_num_cols):]
 
     # Tambah row "TOTAL"
-    total_row = {col: "" for col in tco_summary_transposed.columns}
+    total_row = {col: "" for col in df_tco_transposed.columns}
     total_row[region_col] = "TOTAL"
 
     for v in vendor_list:
-        total_row[v] = tco_summary_transposed[v].sum()
+        total_row[v] = df_tco_transposed[v].sum()
 
-    tco_summary_transposed = pd.concat([tco_summary_transposed, pd.DataFrame([total_row])], ignore_index=True)
+    df_tco_transposed = pd.concat([df_tco_transposed, pd.DataFrame([total_row])], ignore_index=True)
 
     # Format Rupiah & highlight baris TOTAL
-    num_cols = tco_summary_transposed.select_dtypes(include=["number"]).columns
+    num_cols = df_tco_transposed.select_dtypes(include=["number"]).columns
 
-    merged_tco_transposed_styled = (
-        tco_summary_transposed.style
+    df_tco_transposed_styled = (
+        df_tco_transposed.style
         .format({col: format_rupiah for col in num_cols})
         .apply(highlight_total_row_v2, axis=1)
     )
 
-    st.session_state["merged_tco_transposed_by_region"] = tco_summary_transposed
-    tab2.dataframe(merged_tco_transposed_styled, hide_index=True)
+    st.session_state["df_tco_transposed_by_region"] = df_tco_transposed
+    tab2.dataframe(df_tco_transposed_styled, hide_index=True)
 
     # Download button to Excel
-    excel_data = get_excel_download_highlight_total(tco_summary_transposed)
+    excel_data = get_excel_download_highlight_total(df_tco_transposed)
 
     with tab2:
         # Layout tombol (rata kanan)
@@ -1274,163 +1255,35 @@ def page():
             st.download_button(
                 label="Download",
                 data=excel_data,
-                file_name="Merged_Transformed_Region.xlsx",
+                file_name="TCO Transposed - TCO by Region.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 icon=":material/download:",
             )
 
-    # # # SCOPEE -> REGION COMPARISONN
-    # # tab2.markdown("##### 🧠 Bid & Price Analysis — Region")
-
-    # # Ambil daftar scope dari salah satu vendor (asumsi sama di semua)
-    # sample_vendor = next(iter(result.values()))
-    # scope_cols = sample_vendor.columns[1:-1]  # kolom setelah "Region"
-
-    # # # Loop per Scope
-    # # tabs = tab2.tabs(scope_cols.tolist())
-
-    # # for i, scope in enumerate(scope_cols):
-    # #     with tabs[i]:
-    # #         df_scope = pd.DataFrame()
-    # #         ref_order = None  # simpan urutan scope vendor pertama
-
-    # #         # Ambil kolom scope dari semua vendor
-    # #         for j, (vendor, df_vendor) in enumerate(result.items()):
-    # #             scope_col = df_vendor.columns[0]
-    # #             df_temp = df_vendor[[scope_col, scope]].copy()
-    # #             df_temp.rename(columns={scope: f"{vendor}"}, inplace=True)
-
-    # #             # Simpan urutan scope vendor pertama
-    # #             if j == 0:
-    # #                 ref_order = df_temp[scope_col].tolist()
-    # #                 df_scope = df_temp
-    # #             else:
-    # #                 df_scope = df_scope.merge(df_temp, on=scope_col, how="outer")
-
-    # #         # Reorder kembali sesuai urutan vendor pertama
-    # #         if ref_order is not None:
-    # #             df_scope[scope_col] = pd.Categorical(df_scope[scope_col], categories=ref_order, ordered=True)
-    # #             df_scope = df_scope.sort_values(scope_col).reset_index(drop=True)
-
-    # #         # --- Hitung ranking harga per baris ---
-    # #         vendor_cols = [c for c in df_scope.columns if c != scope_col]
-    # #         df_scope["1st Lowest"] = df_scope[vendor_cols].min(axis=1, numeric_only=True)
-    # #         df_scope["1st Vendor"] = df_scope[vendor_cols].idxmin(axis=1)
-    # #         df_scope["2nd Lowest"] = df_scope[vendor_cols].apply(
-    # #             lambda row: sorted([v for v in row if pd.notna(v)])[1]
-    # #             if len([v for v in row if pd.notna(v)]) > 1
-    # #             else None,
-    # #             axis=1,
-    # #         )
-    # #         df_scope["2nd Vendor"] = df_scope.apply(
-    # #             lambda row: next(
-    # #                 (col for col in vendor_cols if row[col] == row["2nd Lowest"]), None
-    # #             ),
-    # #             axis=1,
-    # #         )
-
-    # #         # Gap 1 to 2 (%)
-    # #         df_scope["Gap 1 to 2 (%)"] = (
-    # #             (df_scope["2nd Lowest"] - df_scope["1st Lowest"]) / df_scope["1st Lowest"] * 100
-    # #         ).round(1)
-
-    # #         # --- Hitung Median & Deviasi ---
-    # #         df_scope["Median Price"] = df_scope[vendor_cols].median(axis=1, numeric_only=True)
-    # #         for vendor in vendor_cols:
-    # #             df_scope[f"{vendor} to Median (%)"] = (
-    # #                 (df_scope[vendor] - df_scope["Median Price"]) / df_scope["Median Price"] * 100
-    # #             ).round(1)
-
-    # #         # --- 🎯 Tambahkan dua slicer terpisah untuk 1st Vendor dan 2nd Vendor
-    # #         all_1st = sorted(df_scope["1st Vendor"].dropna().unique())
-    # #         all_2nd = sorted(df_scope["2nd Vendor"].dropna().unique())
-
-    # #         col_sel_1, col_sel_2 = st.columns(2)
-    # #         with col_sel_1:
-    # #             selected_1st = st.multiselect(
-    # #                 "Filter: 1st vendor",
-    # #                 options=all_1st,
-    # #                 default=None,
-    # #                 placeholder="Choose one or more vendors",
-    # #                 key=f"filter_1st_vendor_{scope}"
-    # #             )
-    # #         with col_sel_2:
-    # #             selected_2nd = st.multiselect(
-    # #                 "Filter: 2nd vendor",
-    # #                 options=all_2nd,
-    # #                 default=None,
-    # #                 placeholder="Choose one or more vendors",
-    # #                 key=f"filter_2nd_vendor_{scope}"
-    # #             )
-
-    # #         # --- Terapkan filter dengan logika AND
-    # #         if selected_1st and selected_2nd:
-    # #             df_filtered = df_scope[
-    # #                 df_scope["1st Vendor"].isin(selected_1st) &
-    # #                 df_scope["2nd Vendor"].isin(selected_2nd)
-    # #             ]
-    # #         elif selected_1st:
-    # #             df_filtered = df_scope[df_scope["1st Vendor"].isin(selected_1st)]
-    # #         elif selected_2nd:
-    # #             df_filtered = df_scope[df_scope["2nd Vendor"].isin(selected_2nd)]
-    # #         else:
-    # #             df_filtered = df_scope.copy()
-
-    # #         # --- Format rupiah & persentase hanya untuk df_filtered
-    # #         num_cols = df_filtered.select_dtypes(include=["number"]).columns
-    # #         format_dict = {col: format_rupiah for col in num_cols}
-    # #         format_dict.update({"Gap 1 to 2 (%)": "{:.1f}%"})
-    # #         for v in vendor_cols:
-    # #             format_dict[f"{v} to Median (%)"] = "{:+.1f}%"
-
-    # #         df_styled = (
-    # #             df_filtered.style
-    # #             .format(format_dict)
-    # #             .apply(lambda row: highlight_1st_2nd_vendor(row, df_filtered.columns), axis=1)
-    # #         )
-
-    # #         st.caption(f"✨ Total number of data entries: **{len(df_filtered)}**")
-    # #         st.dataframe(df_styled, hide_index=True)
-
-    # #         # Download button to Excel
-    # #         excel_data = get_excel_download_highlight_1st_2nd_lowest(df_filtered, sheet_name="Scope Comparison")
-
-    # #         # Layout tombol (rata kanan)
-    # #         col1, col2, col3 = st.columns([2.3,2,1])
-    # #         with col3:
-    # #             st.download_button(
-    # #                 label="Download",
-    # #                 data=excel_data,
-    # #                 file_name=f"Scope Comparison - {scope}.xlsx",
-    # #                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    # #                 icon=":material/download:",
-    # #                 key=f"download_Scope_{scope}_Comparison"  # unik per tab
-    # #             )
-
-    # tab2.divider()
+    tab2.divider()
 
     # GABUNGG SEMUA SCOPE JADI SATU
     tab2.markdown("##### 🧠 Bid & Price Summary Analysis — Scope")
 
     # Hapus kolom "TOTAL" 
-    df_analysis_transpose = df_all_vendors_transposed.drop(columns=["TOTAL"], errors="ignore").copy()
+    df_raw_analysis_transpose = df_merge_transposed.drop(columns=["TOTAL"], errors="ignore").copy()
 
     # Identifikasi kolom
     vendor_col = "VENDOR"
     
-    non_num_cols = df_analysis_transpose.select_dtypes(exclude=["number"]).columns.tolist()
+    non_num_cols = df_raw_analysis_transpose.select_dtypes(exclude=["number"]).columns.tolist()
     non_num_cols = [c for c in non_num_cols if c != vendor_col]
 
     first_non_num = non_num_cols[0] # kolom Region
 
-    num_cols = df_analysis_transpose.select_dtypes(include=["number"]).columns.tolist()
+    num_cols = df_raw_analysis_transpose.select_dtypes(include=["number"]).columns.tolist()
 
     # Hapus row TOTAL
     first_non_num = non_num_cols[0]
-    df_analysis_transpose = df_analysis_transpose[df_analysis_transpose[first_non_num].astype(str).str.upper() != "TOTAL"].copy()
+    df_raw_analysis_transpose = df_raw_analysis_transpose[df_raw_analysis_transpose[first_non_num].astype(str).str.upper() != "TOTAL"].copy()
 
     # Unpivot
-    df_long = df_analysis_transpose.melt(
+    df_long = df_raw_analysis_transpose.melt(
         id_vars=[vendor_col] + non_num_cols,
         value_vars=num_cols,
         var_name="SCOPE",
@@ -1441,7 +1294,7 @@ def page():
     df_long = df_long.dropna(subset=["VALUE"]).copy()
 
     # Pivot
-    df_all_scopes = (
+    df_analysis_transposed = (
         df_long.pivot_table(
             index=["SCOPE"] + non_num_cols,
             columns=vendor_col,
@@ -1453,130 +1306,44 @@ def page():
     )
 
     # Kolom vendor dinamis
-    vendor_cols = df_all_scopes.columns[len(["SCOPE"] + non_num_cols):]
+    vendor_cols = df_analysis_transposed.columns[len(["SCOPE"] + non_num_cols):]
 
     # 1st & 2nd Lowest
-    df_all_scopes["1st Lowest"] = df_all_scopes[vendor_cols].min(axis=1)
-    df_all_scopes["1st Vendor"] = df_all_scopes[vendor_cols].idxmin(axis=1)
+    df_analysis_transposed["1st Lowest"] = df_analysis_transposed[vendor_cols].min(axis=1)
+    df_analysis_transposed["1st Vendor"] = df_analysis_transposed[vendor_cols].idxmin(axis=1)
 
-    df_all_scopes["2nd Lowest"] = df_all_scopes[vendor_cols].apply(
+    df_analysis_transposed["2nd Lowest"] = df_analysis_transposed[vendor_cols].apply(
         lambda row: row.nsmallest(2).iloc[-1] if len(row.dropna()) >= 2 else np.nan,
         axis=1
     )
 
-    df_all_scopes["2nd Vendor"] = df_all_scopes[vendor_cols].apply(
+    df_analysis_transposed["2nd Vendor"] = df_analysis_transposed[vendor_cols].apply(
         lambda row: row.nsmallest(2).index[-1] if len(row.dropna()) >= 2 else "",
         axis=1
     )
 
     # Gap (%)
-    df_all_scopes["Gap 1 to 2 (%)"] = (
-        (df_all_scopes["2nd Lowest"] - df_all_scopes["1st Lowest"]) / df_all_scopes["1st Lowest"] * 100
+    df_analysis_transposed["Gap 1 to 2 (%)"] = (
+        (df_analysis_transposed["2nd Lowest"] - df_analysis_transposed["1st Lowest"]) / df_analysis_transposed["1st Lowest"] * 100
     ).round(2)
 
     # Median Price
-    df_all_scopes["Median Price"] = df_all_scopes[vendor_cols].median(axis=1)
+    df_analysis_transposed["Median Price"] = df_analysis_transposed[vendor_cols].median(axis=1)
 
     # Vendor -> Median (%)
     for v in vendor_cols:
-        df_all_scopes[f"{v} to Median (%)"] = (
-            (df_all_scopes[v] - df_all_scopes["Median Price"]) / df_all_scopes["Median Price"] * 100
+        df_analysis_transposed[f"{v} to Median (%)"] = (
+            (df_analysis_transposed[v] - df_analysis_transposed["Median Price"]) / df_analysis_transposed["Median Price"] * 100
         ).round(2)
 
     # Simpan ke session state
-    st.session_state["bid_and_price_analysis_transposed_tco_by_region"] = df_all_scopes
-
-    # # Ambil daftar scope dari salah satu vendor (asumsi sama di semua)
-    # sample_vendor = next(iter(result.values()))
-
-    # # Hapus kolom TOTAL kalau ada
-    # if "TOTAL" in sample_vendor.columns:
-    #     sample_vendor = sample_vendor.drop(columns=["TOTAL"])
-
-    # num_cols = sample_vendor.select_dtypes(include=["number"]).columns.tolist()
-    # non_num_cols = [c for c in sample_vendor.columns if c not in num_cols]
-
-    # # non-num pertama = “key”, contoh: Scope
-    # first_non_num = non_num_cols[0]          
-
-    # # non-num selain key → ikut dibawa (desc, uom, dll)
-    # extra_non_num = non_num_cols[1:]         
-
-    # # Scope list = semua kolom numeric
-    # scope_cols = num_cols                    
-
-    # all_scopes_combined = []
-
-    # for scope in scope_cols:
-    #     df_scope = pd.DataFrame()
-    #     ref_order = None
-
-    #     for j, (vendor, df_vendor) in enumerate(result.items()):
-    #         # Ambil semua non-num + kolom scope tertentu
-    #         df_temp = df_vendor[non_num_cols + [scope]].copy()
-    #         df_temp.rename(columns={scope: vendor}, inplace=True)
-
-    #         if j == 0:
-    #             ref_order = df_temp[first_non_num].tolist()
-    #             df_scope = df_temp
-    #         else:
-    #             df_scope = df_scope.merge(df_temp, on=non_num_cols, how="outer")
-
-    #     # Urutkan mengikuti vendor pertama
-    #     if ref_order is not None:
-    #         df_scope[first_non_num] = pd.Categorical(df_scope[first_non_num],
-    #                                                 categories=ref_order,
-    #                                                 ordered=True)
-    #         df_scope = df_scope.sort_values(first_non_num).reset_index(drop=True)
-
-    #     # Hitung metrik seperti sebelumnya
-    #     vendor_cols = [c for c in df_scope.columns if c not in non_num_cols]
-
-    #     # 1st lowest
-    #     df_scope["1st Lowest"] = df_scope[vendor_cols].min(axis=1, numeric_only=True)
-    #     df_scope["1st Vendor"] = df_scope[vendor_cols].idxmin(axis=1)
-
-    #     # 2nd lowest
-    #     df_scope["2nd Lowest"] = df_scope[vendor_cols].apply(
-    #         lambda row: row.nsmallest(2).iloc[-1]
-    #         if row.count() >= 2 else None,
-    #         axis=1
-    #     )
-    #     df_scope["2nd Vendor"] = df_scope.apply(
-    #         lambda row: next((col for col in vendor_cols
-    #                         if row[col] == row["2nd Lowest"]), None),
-    #         axis=1
-    #     )
-
-    #     # GAP %
-    #     df_scope["Gap 1 to 2 (%)"] = (
-    #         (df_scope["2nd Lowest"] - df_scope["1st Lowest"]) /
-    #         df_scope["1st Lowest"] * 100
-    #     ).round(1)
-
-    #     # Median
-    #     df_scope["Median Price"] = df_scope[vendor_cols].median(axis=1)
-
-    #     # Vendor → median (%)
-    #     for v in vendor_cols:
-    #         df_scope[f"{v} to Median (%)"] = (
-    #             (df_scope[v] - df_scope["Median Price"]) /
-    #             df_scope["Median Price"] * 100
-    #         ).round(1)
-
-    #     # Tambah kolom nama scope (fix)
-    #     df_scope.insert(0, "SCOPE", scope)
-
-    #     all_scopes_combined.append(df_scope)
-
-    # # Gabungkan semua scope jadi satu DataFrame besar
-    # df_all_scopes = pd.concat(all_scopes_combined, ignore_index=True)
+    st.session_state["bid_and_price_analysis_transposed_tco_by_region"] = df_analysis_transposed
 
     # --- 🎯 Tambahkan slicer
-    all_scope = sorted(df_all_scopes["SCOPE"].dropna().unique())
-    all_region = sorted(df_all_scopes[first_non_num].dropna().unique())
-    all_1st = sorted(df_all_scopes["1st Vendor"].dropna().unique())
-    all_2nd = sorted(df_all_scopes["2nd Vendor"].dropna().unique())
+    all_scope = sorted(df_analysis_transposed["SCOPE"].dropna().unique())
+    all_region = sorted(df_analysis_transposed[first_non_num].dropna().unique())
+    all_1st = sorted(df_analysis_transposed["1st Vendor"].dropna().unique())
+    all_2nd = sorted(df_analysis_transposed["2nd Vendor"].dropna().unique())
 
     with tab2:
         col_sel_1, col_sel_2, col_sel_3, col_sel_4 = st.columns(4)
@@ -1614,45 +1381,45 @@ def page():
             )
 
         # --- Terapkan filter AND secara dinamis
-        df_filtered_scope = df_all_scopes.copy()
+        df_filtered_transposed = df_analysis_transposed.copy()
 
         if selected_scope:
-            df_filtered_scope = df_filtered_scope[df_filtered_scope["SCOPE"].isin(selected_scope)]
+            df_filtered_transposed = df_filtered_transposed[df_filtered_transposed["SCOPE"].isin(selected_scope)]
 
         if selected_region:
-            df_filtered_scope = df_filtered_scope[df_filtered_scope[first_non_num].isin(selected_region)]
+            df_filtered_transposed = df_filtered_transposed[df_filtered_transposed[first_non_num].isin(selected_region)]
 
         if selected_1st:
-            df_filtered_scope = df_filtered_scope[df_filtered_scope["1st Vendor"].isin(selected_1st)]
+            df_filtered_transposed = df_filtered_transposed[df_filtered_transposed["1st Vendor"].isin(selected_1st)]
 
         if selected_2nd:
-            df_filtered_scope = df_filtered_scope[df_filtered_scope["2nd Vendor"].isin(selected_2nd)]
+            df_filtered_transposed = df_filtered_transposed[df_filtered_transposed["2nd Vendor"].isin(selected_2nd)]
 
 
     # --- Styling (Rupiah & Persen) ---
-    num_cols = df_filtered_scope.select_dtypes(include=["number"]).columns
+    num_cols = df_filtered_transposed.select_dtypes(include=["number"]).columns
     format_dict = {col: format_rupiah for col in num_cols}
     format_dict.update({"Gap 1 to 2 (%)": "{:.1f}%"})
     for vendor in vendor_cols:
         format_dict[f"{vendor} to Median (%)"] = "{:+.1f}%"
 
-    df_filtered_scope_styled = (
-        df_filtered_scope.style
+    df_filtered_transposed_styled = (
+        df_filtered_transposed.style
         .format(format_dict)
-        .apply(lambda row: highlight_1st_2nd_vendor(row, df_filtered_scope.columns), axis=1)
+        .apply(lambda row: highlight_1st_2nd_vendor(row, df_filtered_transposed.columns), axis=1)
     )
 
-    tab2.caption(f"✨ Total number of data entries: **{len(df_filtered_scope)}**")
-    tab2.dataframe(df_filtered_scope_styled, hide_index=True)
+    tab2.caption(f"✨ Total number of data entries: **{len(df_filtered_transposed)}**")
+    tab2.dataframe(df_filtered_transposed_styled, hide_index=True)
 
-    excel_data = get_excel_download_highlight_1st_2nd_lowest(df_filtered_scope)
+    excel_data = get_excel_download_highlight_1st_2nd_lowest(df_filtered_transposed)
     with tab2:
         col1, col2, col3 = st.columns([2.3,2,1])
         with col3:
             st.download_button(
                 label="Download",
                 data=excel_data,
-                file_name="Scope Comparison - ALL.xlsx",
+                file_name="Bid & Price Analysis Transposed - TCO by Region.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 icon=":material/download:",
             )
@@ -1666,15 +1433,15 @@ def page():
         with subtab1:
             # --- WIN RATE VISUALIZATION ---
             # --- Hitung total kemenangan (1st & 2nd Vendor)
-            win1_counts = df_all_scopes["1st Vendor"].value_counts(dropna=True).reset_index()
+            win1_counts = df_analysis_transposed["1st Vendor"].value_counts(dropna=True).reset_index()
             win1_counts.columns = ["Vendor", "Wins1"]
 
-            win2_counts = df_all_scopes["2nd Vendor"].value_counts(dropna=True).reset_index()
+            win2_counts = df_analysis_transposed["2nd Vendor"].value_counts(dropna=True).reset_index()
             win2_counts.columns = ["Vendor", "Wins2"]
 
             # --- Hitung total partisipasi vendor ---
             vendor_counts = (
-                df_all_scopes[vendor_cols]
+                df_analysis_transposed[vendor_cols]
                 .notna()       # True kalau vendor berpartisipasi (ada harga)
                 .sum()         # Hitung True per kolom
                 .reset_index()
@@ -1855,7 +1622,7 @@ def page():
         with subtab2:
             # --- AVERAGE GAP VISUALIZATION ---
             # --- Hitung rata-rata Gap 1 to 2 (%) per Vendor (hanya untuk 1st Vendor)
-            df_gap = df_all_scopes.copy()
+            df_gap = df_analysis_transposed.copy()
 
             # Ubah kolom 'Gap 1 to 2 (%)' ke numerik (hapus simbol %)
             df_gap["Gap 1 to 2 (%)"] = (
@@ -1963,3 +1730,114 @@ def page():
                     
                     The dashed line represents the average gap across all vendors, serving as a benchmark ({avg_value:.1f}%).
                 ''')
+
+    tab2.divider()
+
+    # SUPERRR BUTTOONNN 2
+    tab2.markdown("##### 🧑‍💻 Super Download — Export Selected Sheets")
+    dataframes = {
+        "Merge Transposed": df_merge_transposed,
+        "TCO Summary Transposed": df_tco_transposed,
+        "Bid & Price Analysis Transposed": df_filtered_transposed,
+    }
+
+    # Tampilkan multiselect
+    selected_sheets = tab2.multiselect(
+        "Select sheets to download in a single Excel file:",
+        options=list(dataframes.keys()),
+        default=list(dataframes.keys())  # default semua dipilih
+    )
+
+    # Fungsi "Super Button" & Formatting
+    def generate_multi_sheet_excel_transposed(selected_sheets, df_dict):
+        """
+        Buat Excel multi-sheet dengan highlight:
+        - Sheet 'Bid & Price Analysis' -> highlight 1st & 2nd vendor
+        - Sheet lainnya -> highlight row TOTAL
+        """
+        output = BytesIO()
+
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            for sheet in selected_sheets:
+                df = df_dict[sheet].copy()
+                df.to_excel(writer, index=False, sheet_name=sheet)
+                workbook  = writer.book
+                worksheet = writer.sheets[sheet]
+
+                # --- Format umum ---
+                fmt_rupiah = workbook.add_format({'num_format': '#,##0'})
+                fmt_pct    = workbook.add_format({'num_format': '#,##0.0"%"'})
+                fmt_total  = workbook.add_format({
+                    "bold": True, "bg_color": "#D9EAD3", "font_color": "#1A5E20", "num_format": "#,##0"
+                })
+                fmt_first  = workbook.add_format({'bg_color': '#C6EFCE', "num_format": "#,##0"})
+                fmt_second = workbook.add_format({'bg_color': '#FFEB9C', "num_format": "#,##0"})
+
+                # Identifikasi numeric columns
+                numeric_cols = df.select_dtypes(include=["number"]).columns.tolist()
+                vendor_cols = [c for c in numeric_cols] if sheet == "Bid & Price Analysis Transposed" else []
+
+                # Apply format kolom numeric / persen
+                for col_idx, col_name in enumerate(df.columns):
+                    if col_name in numeric_cols:
+                        worksheet.set_column(col_idx, col_idx, 15, fmt_rupiah)
+                    if "%" in col_name:
+                        worksheet.set_column(col_idx, col_idx, 15, fmt_pct)
+
+                # --- Highlight baris ---
+                for row_idx, row in enumerate(df.itertuples(index=False), start=1):
+                    # Cek apakah TOTAL
+                    is_total_row = any(str(x).strip().upper() == "TOTAL" for x in row if pd.notna(x))
+
+                    # Ambil nama 1st & 2nd vendor untuk sheet Bid & Price Analysis Transposed
+                    if sheet == "Bid & Price Analysis Transposed":
+                        first_vendor_name = row[df.columns.get_loc("1st Vendor")]
+                        second_vendor_name = row[df.columns.get_loc("2nd Vendor")]
+
+                        # Cari index kolom vendor di vendor_cols
+                        first_idx = df.columns.get_loc(first_vendor_name) if first_vendor_name in vendor_cols else None
+                        second_idx = df.columns.get_loc(second_vendor_name) if second_vendor_name in vendor_cols else None
+
+                    # Loop tiap kolom
+                    for col_idx, col_name in enumerate(df.columns):
+                        value = row[col_idx]
+                        fmt = None
+
+                        # Highlight TOTAL untuk sheet selain Bid & Price Analysis Transposed
+                        if is_total_row and sheet in ["Merge Transposed", "TCO Summary Transposed"]:
+                            fmt = fmt_total
+
+                        # Highlight 1st/2nd vendor
+                        elif sheet == "Bid & Price Analysis Transposed":
+                            if first_idx is not None and col_idx == first_idx:
+                                fmt = fmt_first
+                            elif second_idx is not None and col_idx == second_idx:
+                                fmt = fmt_second
+
+                        # Tangani NaN / None / inf
+                        if pd.isna(value) or (isinstance(value, (int, float)) and np.isinf(value)):
+                            value = ""
+
+                        worksheet.write(row_idx, col_idx, value, fmt)
+
+        output.seek(0)
+        return output
+
+    # --- FRAGMENT UNTUK BALLOONS ---
+    @st.fragment
+    def release_the_balloons():
+        tab2.balloons()
+
+    # ---- DOWNLOAD BUTTON ----
+    if selected_sheets:
+        excel_bytes = generate_multi_sheet_excel_transposed(selected_sheets, dataframes)
+
+        tab2.download_button(
+            label="Download",
+            data=excel_bytes,
+            file_name="TCO Comparison by Region - Transposed Data.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            on_click=release_the_balloons,
+            type="primary",
+            use_container_width=True,
+        )
