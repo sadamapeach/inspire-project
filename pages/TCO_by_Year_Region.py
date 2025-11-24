@@ -400,13 +400,13 @@ def page():
         result[name] = df_clean
         # st.dataframe(df_styled, hide_index=True)
 
-    #     # --- NOTIFIKASI KHUSUS ---
-    #     if (rows_after < rows_before) or (cols_after < cols_before):
-    #         st.markdown(
-    #             "<p style='font-size:12px; color:#808080; margin-top:-15px; margin-bottom:0;'>"
-    #             "Preprocessing completed! Hidden rows and columns removed ✅</p>",
-    #             unsafe_allow_html=True
-    #         )
+        # # --- NOTIFIKASI KHUSUS ---
+        # if (rows_after < rows_before) or (cols_after < cols_before):
+        #     st.markdown(
+        #         "<p style='font-size:12px; color:#808080; margin-top:-15px; margin-bottom:0;'>"
+        #         "Preprocessing completed! Hidden rows and columns removed ✅</p>",
+        #         unsafe_allow_html=True
+        #     )
 
     st.session_state["result_tco_by_year_region"] = result
     # st.divider()
@@ -418,46 +418,67 @@ def page():
 
     for vendor_name, df_vendor in result.items():
         df_temp = df_vendor.copy()
-        year_col = df_temp.columns[0]   # Year
-        scope_col = df_temp.columns[1]  # Scope
-        numeric_cols = df_temp.select_dtypes(include=["number"]).columns
+
+        # Identifikasi kolom
+        non_num_cols = df_temp.select_dtypes(exclude=["number"]).columns.tolist()
+        num_cols     = df_temp.select_dtypes(include=["number"]).columns.tolist()
+
+        # Ambil dua pertama untuk grouping utama (year & scope)
+        year_col  = non_num_cols[0]
+        scope_col = non_num_cols[1]
 
         # Tambahkan kolom VENDOR
         df_temp.insert(0, "VENDOR", vendor_name)
 
         vendor_result = []
 
-        # --- Loop tiap year ---
+        # --- Loop tiap YEAR (dynamic)
         for year, group_year in df_temp.groupby(year_col, dropna=False):
-            # Row TOTAL per year
-            total_per_year = {
+
+            # --- Row TOTAL per year
+            total_row = {
                 "VENDOR": vendor_name,
                 year_col: year,
-                scope_col: "TOTAL",
-                **{col: group_year[col].sum(numeric_only=True) for col in numeric_cols}
+                scope_col: "TOTAL"
             }
 
-            # Gabungkan row scope + TOTAL per year
+            # Untuk kolom non-numeric lainnya (selain year & scope), isi kosong
+            for col in non_num_cols[2:]:
+                total_row[col] = ""
+
+            # Numeric sum
+            for col in num_cols:
+                total_row[col] = group_year[col].sum(numeric_only=True)
+
             df_year_with_total = pd.concat(
-                [group_year, pd.DataFrame([total_per_year])],
+                [group_year, pd.DataFrame([total_row])],
                 ignore_index=True
             )
+
             vendor_result.append(df_year_with_total)
 
-        # --- Gabungkan semua year untuk vendor ini ---
+        # --- Gabungkan semua year untuk vendor ini
         df_vendor_with_year_total = pd.concat(vendor_result, ignore_index=True)
 
-        # Row TOTAL besar per vendor → hanya jumlahkan row yang scope == 'TOTAL'
-        total_rows_only = df_vendor_with_year_total[df_vendor_with_year_total[scope_col] == "TOTAL"]
-        vendor_total_row = {
-            "VENDOR": vendor_name,
-            year_col: "TOTAL",
-            scope_col: "",
-            **{col: total_rows_only[col].sum(numeric_only=True) for col in numeric_cols}
-        }
+        # --- TOTAL BESAR per vendor → hanya dari row TOTAL tiap year
+        total_rows = df_vendor_with_year_total[df_vendor_with_year_total[scope_col] == "TOTAL"]
 
+        vendor_total = {"VENDOR": vendor_name}
+
+        vendor_total[year_col] = "TOTAL"
+        vendor_total[scope_col] = ""
+
+        # Kosongkan semua non_num selain year & scope
+        for col in non_num_cols[2:]:
+            vendor_total[col] = ""
+
+        # Sum semua numeric
+        for col in num_cols:
+            vendor_total[col] = total_rows[col].sum(numeric_only=True)
+
+        # Gabungkan ke dataframe vendor
         df_vendor_final = pd.concat(
-            [df_vendor_with_year_total, pd.DataFrame([vendor_total_row])],
+            [df_vendor_with_year_total, pd.DataFrame([vendor_total])],
             ignore_index=True
         )
 
@@ -466,10 +487,9 @@ def page():
     # --- Gabungkan semua vendor ---
     df_all_vendors = pd.concat(merged_list, ignore_index=True)
 
-    # --- Urutkan kolom supaya rapi ---
-    first_cols = ["VENDOR", year_col, scope_col]
-    other_cols = [c for c in df_all_vendors.columns if c not in first_cols]
-    df_all_vendors = df_all_vendors[first_cols + other_cols]
+    # --- Urutkan kolom supaya rapi: VENDOR + non-num + num-col ---
+    final_cols = ["VENDOR"] + non_num_cols + num_cols
+    df_all_vendors = df_all_vendors[final_cols]
 
     # --- Styling (opsional) ---
     num_cols = df_all_vendors.select_dtypes(include=["number"]).columns
@@ -484,8 +504,7 @@ def page():
     st.dataframe(df_styled, hide_index=True)
 
     # Download button to Excel
-    excel_data = get_excel_download_with_highlight(df_all_vendors, sheet_name="Merge TCO Year + Region")
-    # Pastikan berada di tab atau st
+    excel_data = get_excel_download_with_highlight(df_all_vendors)
     col1, col2, col3 = st.columns([2.3,2,1])
     with col3:
         st.download_button(
@@ -501,29 +520,36 @@ def page():
     # COST SUMMARY
     st.markdown("##### 📑 Cost Summary")
 
-    # --- Tentukan kolom utama ---
-    vendor_col = df_all_vendors.columns[0]
-    year_col = df_all_vendors.columns[1]
-    scope_col = df_all_vendors.columns[2]
+    # --- Identifikasi kolom non-numeric dan numeric ---
+    non_num_cols = df_all_vendors.select_dtypes(exclude=["number"]).columns.tolist()
+    numeric_cols = df_all_vendors.select_dtypes(include=["number"]).columns.tolist()
 
-    # --- Tentukan kolom region (exclude kolom awal & TOTAL) ---
-    region_cols = [
-        c for c in df_all_vendors.columns
-        if c not in [vendor_col, year_col, scope_col, "TOTAL"]
-    ]
+    vendor_col = non_num_cols[0]
+    year_col   = non_num_cols[1]
+    scope_col  = non_num_cols[2]
+
+    # --- Sisa non-number (dinamis) ---
+    other_non_num = [c for c in non_num_cols if c not in [vendor_col, year_col, scope_col]]
+
+    # --- Region columns = semua numeric kecuali kolom 'TOTAL' ---
+    region_cols = [c for c in numeric_cols if c.upper() != "TOTAL"]
 
     # --- Transform to long format (Vendor, Year, Region, Scope, Price)
     df_total_price = df_all_vendors.melt(
-        id_vars=[vendor_col, year_col, scope_col],
+        id_vars=[vendor_col, year_col, scope_col] + other_non_num,
         value_vars=region_cols,
         var_name="REGION",
         value_name="PRICE"
     )
 
     # --- Rapikan urutan kolom ---
-    df_total_price = df_total_price[
-        [vendor_col, year_col, "REGION", scope_col, "PRICE"]
-    ]
+    final_cols = (
+        [vendor_col, year_col, "REGION", scope_col] 
+        + other_non_num 
+        + ["PRICE"]
+    )
+
+    df_total_price = df_total_price[final_cols]
 
     # Simpan ke session_state jika perlu
     st.session_state["merged_long_format_total_price"] = df_total_price
@@ -542,8 +568,6 @@ def page():
 
     # Download button to Excel
     excel_data = get_excel_download_with_highlight_v2(df_total_price)
-
-    # Layout tombol (rata kanan)
     col1, col2, col3 = st.columns([2.3,2,1])
     with col3:
         st.download_button(
@@ -704,30 +728,40 @@ def page():
     # --- ANALYTICAL COLUMNS ---
     st.markdown("##### 🧠 Bid & Price Analysis")
 
-    # --- DROP baris TOTAL ---
+    # ---- COPY ----
     df_clean = df_all_vendors.copy()
+
+    # ---- IDENTIFIKASI KOLUMN ----
+    non_num_cols = df_clean.select_dtypes(exclude=["number"]).columns.tolist()
+    numeric_cols  = df_clean.select_dtypes(include=["number"]).columns.tolist()
+
+    vendor_col = non_num_cols[0]          # contoh: VENDOR
+    year_col   = non_num_cols[1]          # contoh: YEAR
+    scope_col  = non_num_cols[2]          # contoh: SCOPE
+
+    # kolom non-num tambahan seperti DESC, UOM, Category, dsb
+    extra_non_num = non_num_cols[3:]      # boleh kosong
 
     # --- Ubah dari format wide (Region1, Region2, dst) ke long ---
     df_melted = df_clean.melt(
-        id_vars=["VENDOR", year_col, scope_col],
+        id_vars=[vendor_col, year_col, scope_col] + extra_non_num,
+        value_vars=[c for c in numeric_cols if c.upper() != "TOTAL"],
         var_name="REGION",
         value_name="PRICE"
     )
 
-    # --- Pastikan data numerik bersih ---
     df_melted["PRICE"] = pd.to_numeric(df_melted["PRICE"], errors="coerce").fillna(0)
 
     # --- Pivot untuk jadi format kolom per vendor ---
     df_pivot = df_melted.pivot_table(
-        index=[year_col, "REGION", scope_col],
-        columns="VENDOR",
+        index=[year_col, "REGION", scope_col] + extra_non_num,
+        columns=vendor_col,
         values="PRICE",
         aggfunc="sum",
         fill_value=0
     ).reset_index()
 
-    # --- Hitung analisis kompetitif ---
-    vendor_cols = [c for c in df_pivot.columns if c not in [year_col, "REGION", scope_col]]
+    vendor_cols = [c for c in df_pivot.columns if c not in [year_col, "REGION", scope_col] + extra_non_num]
 
     # Hitung lowest & second lowest
     df_pivot["1st Lowest"] = df_pivot[vendor_cols].min(axis=1)
@@ -756,22 +790,25 @@ def page():
         df_pivot[f"{v} to Median (%)"] = ((df_pivot[v] - df_pivot["Median Price"]) / df_pivot["Median Price"] * 100).round(2)
 
     # --- Urutkan kolom agar rapi ---
-    summary_cols = [
-        year_col, "REGION", scope_col
-    ] + vendor_cols + [
-        "1st Lowest", "1st Vendor",
+    summary_cols = (
+        [year_col, "REGION", scope_col] +
+        extra_non_num +
+        vendor_cols +
+        ["1st Lowest", "1st Vendor",
         "2nd Lowest", "2nd Vendor",
-        "Gap 1 to 2 (%)", "Median Price"
-    ] + [f"{v} to Median (%)" for v in vendor_cols]
+        "Gap 1 to 2 (%)", "Median Price"] +
+        [f"{v} to Median (%)" for v in vendor_cols]
+    )
 
-    df_summary = df_pivot[summary_cols]
+    df_summary = df_pivot[summary_cols].copy()
 
+    # Hilangkan baris TOTAL
     df_summary = df_summary[
         ~df_summary.apply(
             lambda row: row.astype(str).str.upper().eq("TOTAL").any(),
             axis=1
         )
-    ].copy()
+    ]
 
     # --- 🎯 Tambahkan slicer
     all_year = sorted(df_summary["YEAR"].dropna().unique())
