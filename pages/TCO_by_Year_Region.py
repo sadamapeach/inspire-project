@@ -450,12 +450,12 @@ def page():
             for col in num_cols:
                 total_row[col] = group_year[col].sum(numeric_only=True)
 
-            df_year_with_total = pd.concat(
+            tco_year_with_total = pd.concat(
                 [group_year, pd.DataFrame([total_row])],
                 ignore_index=True
             )
 
-            vendor_result.append(df_year_with_total)
+            vendor_result.append(tco_year_with_total)
 
         # --- Gabungkan semua year untuk vendor ini
         df_vendor_with_year_total = pd.concat(vendor_result, ignore_index=True)
@@ -485,32 +485,32 @@ def page():
         merged_list.append(df_vendor_final)
 
     # --- Gabungkan semua vendor ---
-    df_all_vendors = pd.concat(merged_list, ignore_index=True)
+    df_merge = pd.concat(merged_list, ignore_index=True)
 
     # --- Urutkan kolom supaya rapi: VENDOR + non-num + num-col ---
     final_cols = ["VENDOR"] + non_num_cols + num_cols
-    df_all_vendors = df_all_vendors[final_cols]
+    df_merge = df_merge[final_cols]
 
     # --- Styling (opsional) ---
-    num_cols = df_all_vendors.select_dtypes(include=["number"]).columns
-    df_styled = (
-        df_all_vendors.style
+    num_cols = df_merge.select_dtypes(include=["number"]).columns
+    df_merge_styled = (
+        df_merge.style
         .format({col: format_rupiah for col in num_cols})
         .apply(highlight_total_per_year, axis=1)
         .apply(highlight_vendor_total, axis=1)
     )
 
-    st.caption(f"Data from **{total_sheets} vendors** have been successfully consolidated, analyzing a total of **{len(df_all_vendors):,} combined records**.")
-    st.dataframe(df_styled, hide_index=True)
+    st.caption(f"Data from **{total_sheets} vendors** have been successfully consolidated, analyzing a total of **{len(df_merge):,} combined records**.")
+    st.dataframe(df_merge_styled, hide_index=True)
 
     # Download button to Excel
-    excel_data = get_excel_download_with_highlight(df_all_vendors)
+    excel_data = get_excel_download_with_highlight(df_merge)
     col1, col2, col3 = st.columns([2.3,2,1])
     with col3:
         st.download_button(
             label="Download",
             data=excel_data,
-            file_name="Merge_TCO_Year_Region.xlsx",
+            file_name="Merge Data - TCO by Year Region.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             icon=":material/download:",
         )
@@ -521,8 +521,8 @@ def page():
     st.markdown("##### 📑 Cost Summary")
 
     # --- Identifikasi kolom non-numeric dan numeric ---
-    non_num_cols = df_all_vendors.select_dtypes(exclude=["number"]).columns.tolist()
-    numeric_cols = df_all_vendors.select_dtypes(include=["number"]).columns.tolist()
+    non_num_cols = df_merge.select_dtypes(exclude=["number"]).columns.tolist()
+    numeric_cols = df_merge.select_dtypes(include=["number"]).columns.tolist()
 
     vendor_col = non_num_cols[0]
     year_col   = non_num_cols[1]
@@ -535,7 +535,7 @@ def page():
     region_cols = [c for c in numeric_cols if c.upper() != "TOTAL"]
 
     # --- Transform to long format (Vendor, Year, Region, Scope, Price)
-    df_total_price = df_all_vendors.melt(
+    df_cost_summary = df_merge.melt(
         id_vars=[vendor_col, year_col, scope_col] + other_non_num,
         value_vars=region_cols,
         var_name="REGION",
@@ -549,31 +549,31 @@ def page():
         + ["PRICE"]
     )
 
-    df_total_price = df_total_price[final_cols]
+    df_cost_summary = df_cost_summary[final_cols]
 
     # Simpan ke session_state jika perlu
-    st.session_state["merged_long_format_total_price"] = df_total_price
+    st.session_state["merged_long_format_total_price"] = df_cost_summary
 
     # Format Rupiah untuk kolom PRICE
-    df_total_price_styled = (
-        df_total_price.style
+    df_cost_summary_styled = (
+        df_cost_summary.style
         .format({"PRICE": format_rupiah})
         .apply(highlight_total_per_year, axis=1)
         .apply(highlight_vendor_total, axis=1)
     )
 
     # Tampilkan
-    st.caption(f"Consolidated cost summary containing **{len(df_total_price):,} records** across multiple vendors and regions.")
-    st.dataframe(df_total_price_styled, hide_index=True)
+    st.caption(f"Consolidated cost summary containing **{len(df_cost_summary):,} records** across multiple vendors and regions.")
+    st.dataframe(df_cost_summary_styled, hide_index=True)
 
     # Download button to Excel
-    excel_data = get_excel_download_with_highlight_v2(df_total_price)
+    excel_data = get_excel_download_with_highlight_v2(df_cost_summary)
     col1, col2, col3 = st.columns([2.3,2,1])
     with col3:
         st.download_button(
             label="Download",
             data=excel_data,
-            file_name="Total Price.xlsx",
+            file_name="Cost Summary - TCO by Year Region.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             icon=":material/download:",
         )
@@ -583,19 +583,19 @@ def page():
     tab1, tab2, tab3 = st.tabs(["YEAR", "REGION", "SCOPE"])
 
     vendor_col = "VENDOR"
-    year_col = df_total_price.columns[1]
+    year_col = df_cost_summary.columns[1]
     region_col = "REGION"
-    scope_col = df_total_price.columns[3]
+    scope_col = df_cost_summary.columns[3]
     price_col = "PRICE"
 
     # Tab1: YEAR
     # --- Hapus baris TOTAL agar tidak double count ---
-    df_year_clean = df_total_price[
-        (df_total_price[year_col].astype(str).str.upper() != "TOTAL") &
-        (df_total_price[scope_col].astype(str).str.upper() != "TOTAL")
+    tco_year_clean = df_cost_summary[
+        (df_cost_summary[year_col].astype(str).str.upper() != "TOTAL") &
+        (df_cost_summary[scope_col].astype(str).str.upper() != "TOTAL")
     ]
 
-    df_year = df_year_clean.pivot_table(
+    tco_year = tco_year_clean.pivot_table(
         index=year_col,
         columns="VENDOR",
         values="PRICE",
@@ -605,30 +605,30 @@ def page():
 
     total_row = pd.DataFrame({
         year_col: ["TOTAL"], 
-        **{col: [df_year[col].sum()] for col in df_year.columns if col != year_col}
+        **{col: [tco_year[col].sum()] for col in tco_year.columns if col != year_col}
     })
-    df_year = pd.concat([df_year, total_row], ignore_index=True)
+    tco_year = pd.concat([tco_year, total_row], ignore_index=True)
 
     # Format rupiah, exclude kolom pertama (YEAR)
-    format_dict = {col: format_rupiah for col in df_year.columns[1:]}  # skip kolom pertama
+    format_dict = {col: format_rupiah for col in tco_year.columns[1:]}  # skip kolom pertama
 
-    df_year_styled = (
-        df_year.style
+    tco_year_styled = (
+        tco_year.style
         .format(format_dict)  # hanya format kolom numeric
         .apply(highlight_total_row_v2, axis=1)
     )
 
     tab1.caption("Overview of total vendor costs per year, highlighting annual spending trends and competitiveness.")
-    tab1.dataframe(df_year_styled, hide_index=True)
+    tab1.dataframe(tco_year_styled, hide_index=True)
 
-    excel_data = get_excel_download_highlight_total(df_year)
+    excel_data = get_excel_download_highlight_total(tco_year)
     with tab1:
         col1, col2, col3 = st.columns([2.3,2,1])
         with col3:
             st.download_button(
                 label="Download",
                 data=excel_data,
-                file_name="TCO by Year.xlsx",
+                file_name="TCO Summary (Year) - TCO by Year Region.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 icon=":material/download:",
                 key="download_year"
@@ -636,13 +636,13 @@ def page():
 
     # Tab2: REGION
     # --- Hapus baris TOTAL agar tidak double count ---
-    df_region_clean = df_total_price[
-        (df_total_price[year_col].astype(str).str.upper() != "TOTAL") &
-        (df_total_price[scope_col].astype(str).str.upper() != "TOTAL")
+    tco_region_clean = df_cost_summary[
+        (df_cost_summary[year_col].astype(str).str.upper() != "TOTAL") &
+        (df_cost_summary[scope_col].astype(str).str.upper() != "TOTAL")
     ]
 
     # --- Buat pivot ---
-    df_region = df_region_clean.pivot_table(
+    tco_region = tco_region_clean.pivot_table(
         index=region_col,
         columns=vendor_col,
         values="PRICE",
@@ -653,40 +653,40 @@ def page():
     # --- Tambahkan baris TOTAL ---
     total_row = pd.DataFrame({
         region_col: ["TOTAL"],
-        **{col: [df_region[col].sum()] for col in df_region.columns if col != region_col}
+        **{col: [tco_region[col].sum()] for col in tco_region.columns if col != region_col}
     })
 
-    df_region = pd.concat([df_region, total_row], ignore_index=True)
+    tco_region = pd.concat([tco_region, total_row], ignore_index=True)
 
-    df_region_styled = (
-        df_region.style
+    tco_region_styled = (
+        tco_region.style
         .format(format_rupiah)
         .apply(highlight_total_row_v2, axis=1)
     )
 
     tab2.caption("Breakdown of vendor costs across regions, showing geographical spending distribution and variations.")
-    tab2.dataframe(df_region_styled, hide_index=True)
+    tab2.dataframe(tco_region_styled, hide_index=True)
 
-    excel_data = get_excel_download_highlight_total(df_region)
+    excel_data = get_excel_download_highlight_total(tco_region)
     with tab2:
         col1, col2, col3 = st.columns([2.3,2,1])
         with col3:
             st.download_button(
                 label="Download",
                 data=excel_data,
-                file_name="TCO by Region.xlsx",
+                file_name="TCO Summary (Region) - TCO by Year Region.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 icon=":material/download:",
                 key="download_region"
             )
 
     # Tab3: Scope
-    df_scope_clean = df_total_price[
-        (df_total_price[year_col].astype(str).str.upper() != "TOTAL") &
-        (df_total_price[scope_col].astype(str).str.upper() != "TOTAL")
+    tco_scope_clean = df_cost_summary[
+        (df_cost_summary[year_col].astype(str).str.upper() != "TOTAL") &
+        (df_cost_summary[scope_col].astype(str).str.upper() != "TOTAL")
     ]
 
-    df_scope = df_scope_clean.pivot_table(
+    tco_scope = tco_scope_clean.pivot_table(
         index=scope_col,
         columns=vendor_col,
         values=price_col,
@@ -696,28 +696,28 @@ def page():
 
     total_row = pd.DataFrame({
         scope_col: ["TOTAL"],
-        **{col: [df_scope[col].sum()] for col in df_scope.columns if col != scope_col}
+        **{col: [tco_scope[col].sum()] for col in tco_scope.columns if col != scope_col}
     })
 
-    df_scope = pd.concat([df_scope, total_row], ignore_index=True)
+    tco_scope = pd.concat([tco_scope, total_row], ignore_index=True)
 
-    df_scope_styled = (
-        df_scope.style
+    tco_scope_styled = (
+        tco_scope.style
         .format(format_rupiah)
         .apply(highlight_total_row_v2, axis=1)
     )
 
     tab3.caption("Summary of vendor costs by project scope, providing insight into allocation across different work packages.")
-    tab3.dataframe(df_scope_styled, hide_index=True)
+    tab3.dataframe(tco_scope_styled, hide_index=True)
 
-    excel_data = get_excel_download_highlight_total(df_scope)
+    excel_data = get_excel_download_highlight_total(tco_scope)
     with tab3:
         col1, col2, col3 = st.columns([2.3,2,1])
         with col3:
             st.download_button(
                 label="Download",
                 data=excel_data,
-                file_name="TCO by Scope.xlsx",
+                file_name="TCO Summary (Scope) - TCO by Year Region.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 icon=":material/download:",
                 key="download_scope"
@@ -729,7 +729,7 @@ def page():
     st.markdown("##### 🧠 Bid & Price Analysis")
 
     # ---- COPY ----
-    df_clean = df_all_vendors.copy()
+    df_clean = df_merge.copy()
 
     # ---- IDENTIFIKASI KOLUMN ----
     non_num_cols = df_clean.select_dtypes(exclude=["number"]).columns.tolist()
@@ -851,39 +851,39 @@ def page():
         )
 
     # --- Terapkan filter AND secara dinamis
-    df_filtered = df_summary.copy()
+    df_filtered_analysis = df_summary.copy()
 
     if selected_year:
-        df_filtered = df_filtered[df_filtered["YEAR"].isin(selected_year)]
+        df_filtered_analysis = df_filtered_analysis[df_filtered_analysis["YEAR"].isin(selected_year)]
 
     if selected_region:
-        df_filtered = df_filtered[df_filtered["REGION"].isin(selected_region)]
+        df_filtered_analysis = df_filtered_analysis[df_filtered_analysis["REGION"].isin(selected_region)]
 
     if selected_1st:
-        df_filtered = df_filtered[df_filtered["1st Vendor"].isin(selected_1st)]
+        df_filtered_analysis = df_filtered_analysis[df_filtered_analysis["1st Vendor"].isin(selected_1st)]
 
     if selected_2nd:
-        df_filtered = df_filtered[df_filtered["2nd Vendor"].isin(selected_2nd)]
+        df_filtered_analysis = df_filtered_analysis[df_filtered_analysis["2nd Vendor"].isin(selected_2nd)]
 
-    # --- Format rupiah & persentase hanya untuk df_filtered
-    num_cols = df_filtered.select_dtypes(include=["number"]).columns
+    # --- Format rupiah & persentase hanya untuk df_filtered_analysis
+    num_cols = df_filtered_analysis.select_dtypes(include=["number"]).columns
     format_dict = {col: format_rupiah for col in num_cols}
     format_dict.update({"Gap 1 to 2 (%)": "{:.1f}%"})
     for v in vendor_cols:
         format_dict[f"{v} to Median (%)"] = "{:+.1f}%"
 
     df_summary_styled = (
-        df_filtered.style
+        df_filtered_analysis.style
         .format(format_dict)
-        .apply(lambda row: highlight_1st_2nd_vendor(row, df_filtered.columns), axis=1)
+        .apply(lambda row: highlight_1st_2nd_vendor(row, df_filtered_analysis.columns), axis=1)
     )
 
     # --- Tampilkan hasil ---
-    st.caption(f"✨ Total number of data entries: **{len(df_filtered)}**")
+    st.caption(f"✨ Total number of data entries: **{len(df_filtered_analysis)}**")
     st.dataframe(df_summary_styled, hide_index=True)
 
     # Simpan hasil ke variabel
-    excel_data = get_excel_download_highlight_1st_2nd_lowest(df_filtered)
+    excel_data = get_excel_download_highlight_1st_2nd_lowest(df_filtered_analysis)
 
     # Layout tombol (rata kanan)
     col1, col2, col3 = st.columns([2.3,2,1])
@@ -891,7 +891,7 @@ def page():
         st.download_button(
             label="Download",
             data=excel_data,
-            file_name=f"Bid & Price Analysis - Year Region.xlsx",
+            file_name="Bid & Price Analysis - TCO by Year Region.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             icon=":material/download:"
         )
@@ -1199,3 +1199,132 @@ def page():
                 
                 The dashed line represents the average gap across all vendors, serving as a benchmark ({avg_value:.1f}%).
             ''')
+
+    st.divider()
+
+    # SUPERRR BUTTONN
+    st.markdown("##### 🧑‍💻 Super Download — Export Selected Sheets")
+    dataframes = {
+        "Merge Data": df_merge,
+        "Cost Summary": df_cost_summary,
+        "TCO Summary (Year)": tco_year,
+        "TCO Summary (Region)": tco_region,
+        "TCO Summary (Scope)": tco_scope,
+        "Bid & Price Analysis": df_filtered_analysis,
+    }
+
+    # Tampilkan multiselect
+    selected_sheets = st.multiselect(
+        "Select sheets to download in a single Excel file:",
+        options=list(dataframes.keys()),
+        default=list(dataframes.keys())  # default semua dipilih
+    )
+
+    # Fungsi "Super Button" & Formatting
+    def generate_multi_sheet_excel(selected_sheets, df_dict):
+        """
+        Gabungkan sheet dengan highlight khusus per sheet:
+        - Merge Data / Cost Summary: highlight TOTAL per year & TOTAL vendor
+        - Bid & Price Analysis: highlight 1st & 2nd vendor + TOTAL
+        - TCO sheets: highlight TOTAL
+        Semua akses baris pakai index, jadi aman untuk kolom dengan spasi/simbol.
+        """
+        output = BytesIO()
+
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            for sheet in selected_sheets:
+                df = df_dict[sheet].copy()
+                workbook  = writer.book
+                worksheet = workbook.add_worksheet(sheet)
+                writer.sheets[sheet] = worksheet
+
+                # --- Format umum ---
+                fmt_rupiah = workbook.add_format({'num_format': '#,##0'})
+                fmt_pct    = workbook.add_format({'num_format': '#,##0.0"%"'})
+                fmt_total  = workbook.add_format({'bold': True, 'bg_color': '#D9EAD3', 'font_color': '#1A5E20', 'num_format': '#,##0'})
+                fmt_first  = workbook.add_format({'bg_color': '#C6EFCE', "num_format": "#,##0"})
+                fmt_second = workbook.add_format({'bg_color': '#FFEB9C', "num_format": "#,##0"})
+                fmt_total_year  = workbook.add_format({'bold': True, 'bg_color': '#FFEB9C', 'font_color': '#1A1A1A', 'num_format': '#,##0'})
+                fmt_total_vendor  = workbook.add_format({'bold': True, 'bg_color': '#C6EFCE', 'font_color': '#1A5E20', 'num_format': '#,##0'})
+
+                # --- Tulis header ---
+                for col_idx, col_name in enumerate(df.columns):
+                    worksheet.write(0, col_idx, col_name)
+
+                numeric_cols = df.select_dtypes(include=["number"]).columns.tolist()
+                vendor_cols  = [c for c in numeric_cols] if sheet == "Bid & Price Analysis" else []
+
+                # Atur lebar kolom
+                for col_idx, col_name in enumerate(df.columns):
+                    if col_name in numeric_cols:
+                        worksheet.set_column(col_idx, col_idx, 15, fmt_rupiah)
+                    if "%" in col_name:
+                        worksheet.set_column(col_idx, col_idx, 15, fmt_pct)
+
+                # --- Tulis baris dengan highlight ---
+                for row_idx, row in enumerate(df.itertuples(index=False), start=1):
+                    fmt_row = [None]*len(df.columns)
+
+                    # --- Merge Data highlight ---
+                    if sheet == "Merge Data":
+                        year_val  = str(row[1]).upper()   # kolom Year
+                        scope_val = str(row[2]).upper()   # kolom Scope
+                        if scope_val == "TOTAL" and year_val != "TOTAL":
+                            fmt_row = [fmt_total_year]*len(df.columns)
+                        elif year_val == "TOTAL":
+                            fmt_row = [fmt_total_vendor]*len(df.columns)
+
+                    # --- Cost Summary highlight ---
+                    elif sheet == "Cost Summary":
+                        year_val  = str(row[1]).upper()
+                        scope_val = str(row[3]).upper()
+                        if scope_val == "TOTAL" and year_val != "TOTAL":
+                            fmt_row = [fmt_total_year]*len(df.columns)
+                        elif year_val == "TOTAL":
+                            fmt_row = [fmt_total_vendor]*len(df.columns)
+
+                    # --- Bid & Price Analysis highlight ---
+                    elif sheet == "Bid & Price Analysis":
+                        first_vendor_name  = row[df.columns.get_loc("1st Vendor")]
+                        second_vendor_name = row[df.columns.get_loc("2nd Vendor")]
+                        for col_idx2, col_name2 in enumerate(df.columns):
+                            if col_name2 == first_vendor_name:
+                                fmt_row[col_idx2] = fmt_first
+                            elif col_name2 == second_vendor_name:
+                                fmt_row[col_idx2] = fmt_second
+                            elif str(row[col_idx2]).upper() == "TOTAL":
+                                fmt_row[col_idx2] = fmt_total
+
+                    # --- TCO sheets highlight TOTAL ---
+                    else:
+                        if any(str(row[i]).upper() == "TOTAL" for i in range(len(df.columns)) if row[i] is not None):
+                            fmt_row = [fmt_total]*len(df.columns)
+
+                    # --- Tulis sel ---
+                    for col_idx2 in range(len(df.columns)):
+                        value = row[col_idx2]
+                        if pd.isna(value) or (isinstance(value, (int,float)) and np.isinf(value)):
+                            value = ""
+                        worksheet.write(row_idx, col_idx2, value, fmt_row[col_idx2] if fmt_row[col_idx2] else None)
+
+        output.seek(0)
+        return output.getvalue()
+
+    # --- FRAGMENT UNTUK BALLOONS ---
+    @st.fragment
+    def release_the_balloons():
+        st.balloons()
+
+    # ---- DOWNLOAD BUTTON ----
+    if selected_sheets:
+        excel_bytes = generate_multi_sheet_excel(selected_sheets, dataframes)
+
+        st.download_button(
+            label="Download",
+            data=excel_bytes,
+            file_name="TCO Comparison by Year + Region.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            on_click=release_the_balloons,
+            type="primary",
+            use_container_width=True,
+        )
