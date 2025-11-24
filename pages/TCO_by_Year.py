@@ -227,7 +227,6 @@ def page():
     )
 
     # File Uploader
-    # st.subheader("📂 Upload File")
     st.markdown("##### 📂 Upload File")
     upload_file = st.file_uploader("Upload your file here!", type=["xlsx", "xls"])
 
@@ -379,32 +378,32 @@ def page():
         merged_list.append(df_temp)
 
     # Gabungkan semua vendor jadi satu DataFrame
-    merged_overview = pd.concat(merged_list, ignore_index=True)
+    df_merged = pd.concat(merged_list, ignore_index=True)
 
     # Pastikan kolom berurutan (vendor as index-0)
-    cols = ["VENDOR"] + [c for c in merged_overview.columns if c != "VENDOR"]
-    merged_overview = merged_overview[cols]
+    cols = ["VENDOR"] + [c for c in df_merged.columns if c != "VENDOR"]
+    df_merged = df_merged[cols]
 
     # Simpan session
-    st.session_state["merge_overview_tco_by_year"] = merged_overview
+    st.session_state["merge_overview_tco_by_year"] = df_merged
 
     # Format rupiah dan tampilkan
-    num_cols = merged_overview.select_dtypes(include=["number"]).columns
-    merged_overview_styled = (
-        merged_overview.style
+    num_cols = df_merged.select_dtypes(include=["number"]).columns
+    df_merged_styled = (
+        df_merged.style
         .format({col: format_rupiah for col in num_cols})
         .apply(highlight_total_row_v2, axis=1)
     )
-    st.dataframe(merged_overview_styled, hide_index=True)
+    st.dataframe(df_merged_styled, hide_index=True)
 
     # Download
-    excel_data = get_excel_download_highlight_total(merged_overview)
+    excel_data = get_excel_download_highlight_total(df_merged)
     col1, col2, col3 = st.columns([2.3,2,1])
     with col3:
         st.download_button(
             label="Download",
             data=excel_data,
-            file_name="TCO_Overview_Highlighted.xlsx",
+            file_name="Merge Data - TCO by Year.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             icon=":material/download:",
         )
@@ -424,15 +423,15 @@ def page():
         non_num_cols = [c for c in df_sub.columns if c not in num_cols]
         total_col = "TOTAL"     # Total cost 5Y
 
-        df_merge = df_sub[non_num_cols + [total_col]].rename(columns={total_col: name})
+        df_merge_tco = df_sub[non_num_cols + [total_col]].rename(columns={total_col: name})
 
         # Simpan urutan referensi dari sheet pertama
         if i == 0:
-            ref_order = df_merge[non_num_cols].astype(str)
+            ref_order = df_merge_tco[non_num_cols].astype(str)
             first_non_num_cols = non_num_cols.copy()
-            merged = df_merge
+            merged = df_merge_tco
         else:
-            merged = merged.merge(df_merge, on=non_num_cols, how="outer")
+            merged = merged.merge(df_merge_tco, on=non_num_cols, how="outer")
 
     # Reorder baris sesuai urutan dari sheet pertama
     if ref_order is not None:
@@ -458,22 +457,22 @@ def page():
         if pd.api.types.is_numeric_dtype(merged[col]):
             total_row[col] = merged[col].sum()
 
-    merged_total = pd.concat([merged, pd.DataFrame([total_row])], ignore_index=True)
+    df_tco_summary = pd.concat([merged, pd.DataFrame([total_row])], ignore_index=True)
 
     # Fomat Rupiah & fungsi untuk styling baris TOTAL
-    num_cols = merged_total.select_dtypes(include=["number"]).columns
+    num_cols = df_tco_summary.select_dtypes(include=["number"]).columns
 
-    merged_styled = (
-        merged_total.style
+    df_tco_summary_styled = (
+        df_tco_summary.style
         .format({col: format_rupiah for col in num_cols})
         .apply(highlight_total_row_v2, axis=1)
     )
 
-    st.session_state["merged_tco_by_year"] = merged_total
-    st.dataframe(merged_styled, hide_index=True)
+    st.session_state["merged_tco_by_year"] = df_tco_summary
+    st.dataframe(df_tco_summary_styled, hide_index=True)
 
     # Download button to Excel
-    excel_data = get_excel_download_highlight_total(merged_total)
+    excel_data = get_excel_download_highlight_total(df_tco_summary)
 
     # NEW FEATURE: CONVERGE
     # --- Fungsi reset ---
@@ -530,7 +529,7 @@ def page():
         st.download_button(
             label="Download",
             data=excel_data,
-            file_name="Merged_TCO.xlsx",
+            file_name="TCO Summary - TCO by Year.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             icon=":material/download:",
         )
@@ -613,13 +612,13 @@ def page():
                 total_row[col] = df_converted[col].sum()
 
             # Gabungkan
-            converted_total = pd.concat([df_converted, pd.DataFrame([total_row])], ignore_index=True)
+            df_tco_converted = pd.concat([df_converted, pd.DataFrame([total_row])], ignore_index=True)
 
             # Fomat Rupiah & fungsi untuk styling baris TOTAL
-            num_cols_after = converted_total.select_dtypes(include=["number"]).columns
+            num_cols_after = df_tco_converted.select_dtypes(include=["number"]).columns
 
             converted_styled = (
-                converted_total.style
+                df_tco_converted.style
                 .format({col: format_rupiah for col in num_cols_after})
                 .apply(highlight_total_row_v2, axis=1)
             )
@@ -627,7 +626,7 @@ def page():
             st.dataframe(converted_styled, hide_index=True)
 
             # Download button to Excel
-            excel_data_converted = get_excel_download_highlight_total(converted_total)
+            excel_data_converted = get_excel_download_highlight_total(df_tco_converted)
 
             # Layout tombol (rata kanan)
             col1, col2, col3 = st.columns([2.3,2,1])
@@ -635,7 +634,7 @@ def page():
                 st.download_button(
                     label="Download",
                     data=excel_data_converted,
-                    file_name="Converted_TCO.xlsx",
+                    file_name="TCO Converted - TCO by Year.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     icon=":material/download:",
                 )
@@ -646,7 +645,7 @@ def page():
     st.markdown("##### 🧠 Bid & Price Analysis")
     # st.caption("Comparative analysis across vendors including lowest price, gap percentage, and deviation from median.")
 
-    df_analysis = merged_total.copy()
+    df_analysis = df_tco_summary.copy()
 
     # Identifikasi kolom
     non_numeric_cols = df_analysis.select_dtypes(exclude=["number"]).columns.tolist()
@@ -723,35 +722,35 @@ def page():
 
     # --- Terapkan filter dengan logika AND
     if selected_1st and selected_2nd:
-        df_filtered = df_analysis_final[
+        df_filtered_analysis = df_analysis_final[
             df_analysis_final["1st Vendor"].isin(selected_1st) &
             df_analysis_final["2nd Vendor"].isin(selected_2nd)
         ]
     elif selected_1st:
-        df_filtered = df_analysis_final[df_analysis_final["1st Vendor"].isin(selected_1st)]
+        df_filtered_analysis = df_analysis_final[df_analysis_final["1st Vendor"].isin(selected_1st)]
     elif selected_2nd:
-        df_filtered = df_analysis_final[df_analysis_final["2nd Vendor"].isin(selected_2nd)]
+        df_filtered_analysis = df_analysis_final[df_analysis_final["2nd Vendor"].isin(selected_2nd)]
     else:
-        df_filtered = df_analysis_final.copy()
+        df_filtered_analysis = df_analysis_final.copy()
 
     # Format rupiah
-    num_cols = df_filtered.select_dtypes(include=["number"]).columns
+    num_cols = df_filtered_analysis.select_dtypes(include=["number"]).columns
     format_dic = {col: format_rupiah for col in num_cols}
     format_dic.update({"Gap 1 to 2 (%)": "{:.1f}%"})
     for v in vendor_cols:
         format_dic[f"{v} to Median (%)"] = "{:+.1f}%"
 
     df_analysis_styled = (
-        df_filtered.style
+        df_filtered_analysis.style
         .format(format_dic)
         .apply(lambda row: highlight_1st_2nd_vendor(row, df_analysis_final.columns), axis=1)
     )
 
-    st.caption(f"✨ Total number of data entries: **{len(df_filtered)}**")
+    st.caption(f"✨ Total number of data entries: **{len(df_filtered_analysis)}**")
     st.dataframe(df_analysis_styled, hide_index=True)
 
     # Download button to Excel
-    excel_data = get_excel_download_highlight_1st_2nd_lowest(df_filtered, sheet_name="Bid & Price Analysis")
+    excel_data = get_excel_download_highlight_1st_2nd_lowest(df_filtered_analysis)
 
     # Layout tombol (rata kanan)
     col1, col2, col3 = st.columns([2.3,2,1])
@@ -759,7 +758,7 @@ def page():
         st.download_button(
             label="Download",
             data=excel_data,
-            file_name="Bid & Price Analysis.xlsx",
+            file_name="Bid & Price Analysis - TCO by Year.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             icon=":material/download:",
         )
@@ -1205,40 +1204,111 @@ def page():
     # SUPERRR BUTTONN
     st.markdown("##### 🧑‍💻 Super Download — Export Selected Sheets")
     dataframes = {
-        "Merged Overview": merged_overview,
-        "Merge Total": merged_total,
-        # "Converted Total": converted_total,
-        "Filtered Data": df_filtered,
+        "Merge Data": df_merged,
+        "TCO Summary": df_tco_summary,
+        "Bid & Price Analysis": df_filtered_analysis,
     }
 
+    if "converted_tco_by_year" in st.session_state:
+        dataframes["TCO Converted"] = df_tco_converted
+
     # Tampilkan multiselect
-    selected_keys = st.multiselect(
-        "Select dataframes to download:",
-        options=list(dataframes.keys())
+    selected_sheets = st.multiselect(
+        "Select sheets to download in a single Excel file:",
+        options=list(dataframes.keys()),
+        default=list(dataframes.keys())  # default semua dipilih
     )
 
-    # Fungsi "Super Button"
-    def generate_multi_sheet_excel(selected_keys, dataframes):
-        output = io.BytesIO()
+    # Fungsi "Super Button" & Formatting
+    def generate_multi_sheet_excel(selected_sheets, df_dict):
+        """
+        Buat Excel multi-sheet dengan highlight:
+        - Sheet 'Bid & Price Analysis' -> highlight 1st & 2nd vendor
+        - Sheet lainnya -> highlight row TOTAL
+        """
+        output = BytesIO()
 
         with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-            for key in selected_keys:
-                df = dataframes[key]
-                # Replace invalid sheet name characters
-                safe_sheet_name = key.replace("/", "_")[:31]
-                df.to_excel(writer, sheet_name=safe_sheet_name, index=False)
+            for sheet in selected_sheets:
+                df = df_dict[sheet].copy()
+                df.to_excel(writer, index=False, sheet_name=sheet)
+                workbook  = writer.book
+                worksheet = writer.sheets[sheet]
+
+                # --- Format umum ---
+                fmt_rupiah = workbook.add_format({'num_format': '#,##0'})
+                fmt_pct    = workbook.add_format({'num_format': '#,##0.0"%"'})
+                fmt_total  = workbook.add_format({
+                    "bold": True, "bg_color": "#D9EAD3", "font_color": "#1A5E20", "num_format": "#,##0"
+                })
+                fmt_first  = workbook.add_format({'bg_color': '#C6EFCE', "num_format": "#,##0"})
+                fmt_second = workbook.add_format({'bg_color': '#FFEB9C', "num_format": "#,##0"})
+
+                # Identifikasi numeric columns
+                numeric_cols = df.select_dtypes(include=["number"]).columns.tolist()
+                vendor_cols = [c for c in numeric_cols] if sheet == "Bid & Price Analysis" else []
+
+                # Apply format kolom numeric / persen
+                for col_idx, col_name in enumerate(df.columns):
+                    if col_name in numeric_cols:
+                        worksheet.set_column(col_idx, col_idx, 15, fmt_rupiah)
+                    if "%" in col_name:
+                        worksheet.set_column(col_idx, col_idx, 15, fmt_pct)
+
+                # --- Highlight baris ---
+                for row_idx, row in enumerate(df.itertuples(index=False), start=1):
+                    # Cek apakah TOTAL
+                    is_total_row = any(str(x).strip().upper() == "TOTAL" for x in row if pd.notna(x))
+
+                    # Ambil nama 1st & 2nd vendor untuk sheet Bid & Price Analysis
+                    if sheet == "Bid & Price Analysis":
+                        first_vendor_name = row[df.columns.get_loc("1st Vendor")]
+                        second_vendor_name = row[df.columns.get_loc("2nd Vendor")]
+
+                        # Cari index kolom vendor di vendor_cols
+                        first_idx = df.columns.get_loc(first_vendor_name) if first_vendor_name in vendor_cols else None
+                        second_idx = df.columns.get_loc(second_vendor_name) if second_vendor_name in vendor_cols else None
+
+                    # Loop tiap kolom
+                    for col_idx, col_name in enumerate(df.columns):
+                        value = row[col_idx]
+                        fmt = None
+
+                        # Highlight TOTAL untuk sheet selain Bid & Price Analysis
+                        if is_total_row and sheet in ["Merge Data", "TCO Summary", "TCO Converted"]:
+                            fmt = fmt_total
+
+                        # Highlight 1st/2nd vendor
+                        elif sheet == "Bid & Price Analysis":
+                            if first_idx is not None and col_idx == first_idx:
+                                fmt = fmt_first
+                            elif second_idx is not None and col_idx == second_idx:
+                                fmt = fmt_second
+
+                        # Tangani NaN / None / inf
+                        if pd.isna(value) or (isinstance(value, (int, float)) and np.isinf(value)):
+                            value = ""
+
+                        worksheet.write(row_idx, col_idx, value, fmt)
 
         output.seek(0)
         return output
-    
-    # Download Button
-    if selected_keys:
-        excel_bytes = generate_multi_sheet_excel(selected_keys, dataframes)
+
+    # --- FRAGMENT UNTUK BALLOONS ---
+    @st.fragment
+    def release_the_balloons():
+        st.balloons()
+
+    # ---- DOWNLOAD BUTTON ----
+    if selected_sheets:
+        excel_bytes = generate_multi_sheet_excel(selected_sheets, dataframes)
 
         st.download_button(
-            label="⬇️ Download Selected Dataframes",
+            label="Download",
             data=excel_bytes,
-            file_name="selected_dataframes.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            file_name="TCO Comparison by Year.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            on_click=release_the_balloons,
+            type="primary",
+            use_container_width=True,
         )
-

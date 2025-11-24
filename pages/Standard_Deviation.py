@@ -171,7 +171,6 @@ def page():
     )
 
     # File Uploader
-    # st.subheader("📂 Upload File")
     st.markdown("##### 📂 Upload File")
     upload_file = st.file_uploader("Upload your file here!", type=["xlsx", "xls"])
 
