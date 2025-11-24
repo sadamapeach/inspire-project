@@ -579,6 +579,7 @@ def page():
 
     # PIVOTT TABLEE
     st.markdown("##### 🛸 Pivot Table")
+    st.caption("Pivoted price comparison table showing vendor offers per round for each item.")
 
     total = df_final.columns[1]
     df_ptable = df_final[df_final[total] != "TOTAL"].copy()

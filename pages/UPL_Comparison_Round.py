@@ -488,9 +488,84 @@ def page():
 
     st.divider()
 
-    # TRANSPOSEE DATA
-    st.markdown("##### 🛸 Transpose Data")
-    st.caption("Cross-vendor price mapping to simplify analysis and highlight pricing differences.")
+    # PIVOTT TABLEE
+    st.markdown("##### 🛸 Pivot Table")
+    st.caption("Pivoted price comparison table showing vendor offers per round for each item.")
+
+    # Normalisasi nama vendor
+    raw_transpose["VENDOR"] = raw_transpose["VENDOR"].str.upper().str.strip()
+
+    # Identifikasi kolom
+    non_num_cols = raw_transpose.select_dtypes(exclude=["number"]).columns.tolist()
+    non_num_cols = [c for c in non_num_cols if c not in ["ROUND", "VENDOR"]]
+
+    # Ambil kolom  numerik
+    price_cols = raw_transpose.select_dtypes(include=["number"]).columns.tolist()
+
+    # Long format
+    df_long = raw_transpose.melt(
+        id_vars=["ROUND", "VENDOR"] + non_num_cols,
+        value_vars=price_cols,
+        var_name="PRICE_COL",
+        value_name="PRICE"
+    )
+
+    # Pivot ke format wide (Vendor Round)
+    df_pivot = df_long.pivot_table(
+        index=non_num_cols,
+        columns=["VENDOR", "ROUND"],
+        values="PRICE",
+        aggfunc="first"
+    )
+
+    # Rapikan header (flatten)
+    df_pivot.columns = [f"{vendor} {rnd}" for vendor, rnd in df_pivot.columns]
+    df_pivot = df_pivot.reset_index()
+
+    # Tambahkan row "TOTAL"
+    total_row = {col: "" for col in df_pivot.columns}
+
+    # Isi kolom identifier TOTAL
+    total_row[non_num_cols[0]] = "TOTAL"
+
+    # Hitung total untuk kolom numeric pivot
+    for col in df_pivot.columns:
+        if col not in non_num_cols:
+            total_row[col] = df_pivot[col].sum(numeric_only=True)
+
+    # Append TOTAL row
+    df_pivot = pd.concat([df_pivot, pd.DataFrame([total_row])], ignore_index=True)
+
+    # Format
+    num_cols = df_pivot.select_dtypes(include=["number"]).columns
+
+    df_pivot_styled = (
+        df_pivot.style
+        .format({col: format_rupiah for col in num_cols})
+        .apply(highlight_total_row_v2, axis=1)
+    )
+
+    # Tampilkan
+    st.session_state["pivot2_upl_by_round"] = df_pivot
+    st.dataframe(df_pivot_styled, hide_index=True)
+
+    # Download
+    excel_data = get_excel_download_highlight_total(df_pivot)
+    col1, col2, col3 = st.columns([2.3,2,1])
+    with col3:
+        st.download_button(
+            label="Download",
+            data=excel_data,
+            file_name="Pivot Table UPL by Round.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            icon=":material/download:",
+        )
+
+    st.divider()
+
+    # # TRANSPOSEE DATA
+    # st.markdown("##### 🛸 Transpose Data")
+    # st.caption("Cross-vendor price mapping to simplify analysis and highlight pricing differences.")
     
     df = raw_transpose.copy()
     all_rounds_list = []
@@ -578,22 +653,22 @@ def page():
             .apply(highlight_total_row_v2, axis=1)
     )
 
-    st.dataframe(df_pivot_style, hide_index=True)
+    # st.dataframe(df_pivot_style, hide_index=True)
 
-    # Download button to Excel
-    excel_data = get_excel_download_highlight_total(df_summary)
-    # Pastikan berada di tab atau st
-    col1, col2, col3 = st.columns([2.3,2,1])
-    with col3:
-        st.download_button(
-            label="Download",
-            data=excel_data,
-            file_name="Transpose UPL Round.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            icon=":material/download:",
-        )
+    # # Download button to Excel
+    # excel_data = get_excel_download_highlight_total(df_summary)
+    # # Pastikan berada di tab atau st
+    # col1, col2, col3 = st.columns([2.3,2,1])
+    # with col3:
+    #     st.download_button(
+    #         label="Download",
+    #         data=excel_data,
+    #         file_name="Transpose UPL Round.xlsx",
+    #         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    #         icon=":material/download:",
+    #     )
 
-    st.divider()
+    # st.divider()
 
     # BIDD & PRICEE ANALYSIS
     st.markdown("##### 🧠 Bid & Price Analysis")
