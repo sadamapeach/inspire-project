@@ -104,22 +104,16 @@ def get_excel_download(df, sheet_name="Sheet1"):
 def get_excel_download_highlight(df, sheet_name="Sheet1"):
     output = BytesIO()
 
-    # Buat salinan untuk di-export dan deteksi kolom numeric secara robust
+    # Buat salinan untuk di-export dan deteksi kolom numeric
     df_to_write = df.copy()
 
     numeric_cols = []
     for col in df_to_write.columns:
         # Coerce ke numeric — angka valid tetap, non-angka -> NaN
         coerced = pd.to_numeric(df_to_write[col], errors="coerce")
-
-        # Jika setelah coercion ada minimal satu angka, treat column as numeric
         if coerced.notna().any():
             numeric_cols.append(col)
-            # Replace original column dengan versi numeric (NaN untuk non-number)
             df_to_write[col] = coerced
-        else:
-            # biarkan kolom original (string / object) tetap apa adanya
-            pass
 
     # Buat file Excel dengan XlsxWriter
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
@@ -127,30 +121,31 @@ def get_excel_download_highlight(df, sheet_name="Sheet1"):
         workbook = writer.book
         worksheet = writer.sheets[sheet_name]
 
-        # Format untuk highlight min value
-        fmt_pct_rupiah   = workbook.add_format({'num_format': '#,##0.0"%"'})
+        # Format kolom numeric sebagai persen
+        fmt_pct = workbook.add_format({'num_format': '#,##0.0"%"'})
+        # Format highlight untuk min value
         highlight_format = workbook.add_format({
             "bold": True,
             "bg_color": "#D9EAD3",  # hijau lembut
-            "font_color": "#1A5E20",  # hijau tua
-            "num_format": "#,##0"
+            "font_color": "#1A5E20",
+            "num_format": '#,##0.0"%"'  # persen
         })
 
-        # Terapkan format
-        for col_num, col_name in enumerate(df_to_write.columns):
+        # Terapkan format kolom numeric
+        for col_idx, col_name in enumerate(df_to_write.columns):
             if col_name in numeric_cols:
-                worksheet.set_column(col_num, col_num, 15, fmt_pct_rupiah)
+                worksheet.set_column(col_idx, col_idx, 15, fmt_pct)
 
-        # Iterasi baris (mulai dari baris 1 karena header di baris 0)
-        for row_num, row_data in enumerate(df.itertuples(index=False), start=1):
-            # Ambil nilai numeric
-            numeric_vals = [(i, val) for i, val in enumerate(row_data) if isinstance(val, (int, float))]
+        # Iterasi row untuk highlight min value per row
+        for row_idx, row in enumerate(df_to_write.itertuples(index=False), start=1):
+            # Ambil hanya nilai numerik yang valid (exclude NaN)
+            numeric_vals = [(i, val) for i, val in enumerate(row) if isinstance(val, (int, float)) and not pd.isna(val)]
             if numeric_vals:
                 min_val = min(val for i, val in numeric_vals)
-                # Highlight cell yang sama dengan min_val
                 for col_num, val in numeric_vals:
                     if val == min_val:
-                        worksheet.write(row_num, col_num, val, highlight_format)
+                        # tulis ulang dengan highlight dan format persen
+                        worksheet.write(row_idx, col_num, val / 100 if val > 1 else val, highlight_format)
 
     return output.getvalue()
 
@@ -282,7 +277,7 @@ def page():
         st.download_button(
             label="Download",
             data=excel_data,
-            file_name="Bidder_Rank.xlsx",
+            file_name="Bidder's Rank - Standard Deviation.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             icon=":material/download:",
         )
@@ -322,7 +317,7 @@ def page():
         st.download_button(
             label="Download",
             data=excel_data,
-            file_name="Rank-1 Deviation (%).xlsx",
+            file_name="Rank-1 Deviation (%) - Standard Deviation.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             icon=":material/download:",
         )
@@ -518,3 +513,104 @@ def page():
 
         # Tampilkan
         tab.altair_chart(chart)
+
+    st.divider()
+
+    # SUPERR BUTTON
+    st.markdown("##### 🧑‍💻 Super Download — Export Selected Sheets")
+    dataframes = {
+        "Bidder's Rank": df_rank,
+        "Rank-1 Deviation (%)": df_dev,
+        "Summary Deviation (%)": df_summary,
+    }
+
+    # Tampilkan multiselect
+    selected_sheets = st.multiselect(
+        "Select sheets to download in a single Excel file:",
+        options=list(dataframes.keys()),
+        default=list(dataframes.keys())  # default semua dipilih
+    )
+
+    # Fungsi "Super Button" & Formatting
+    def generate_multi_sheet_excel(selected_sheets, df_dict):
+        output = BytesIO()
+
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            for sheet in selected_sheets:
+                df = df_dict[sheet].copy()
+
+                # --- Special sheet: Rank-1 Deviation (%) ---
+                if sheet == "Rank-1 Deviation (%)":
+                    df_to_write = df.copy()
+                    numeric_cols = [c for c in df_to_write.columns if pd.api.types.is_numeric_dtype(df_to_write[c])]
+
+                    df_to_write.to_excel(writer, index=False, sheet_name=sheet)
+                    workbook = writer.book
+                    worksheet = writer.sheets[sheet]
+
+                    # Format kolom numeric / persen
+                    fmt_pct = workbook.add_format({'num_format': '#,##0.0"%"'})
+                    highlight_format = workbook.add_format({
+                        "bold": True,
+                        "bg_color": "#D9EAD3",  # hijau lembut
+                        "font_color": "#1A5E20",
+                        "num_format": '#,##0.0"%"'
+                    })
+
+                    # Terapkan format kolom numeric
+                    for col_idx, col_name in enumerate(df_to_write.columns):
+                        if col_name in numeric_cols:
+                            worksheet.set_column(col_idx, col_idx, 15, fmt_pct)
+
+                    # Highlight nilai minimum per row (abaikan NaN)
+                    for row_idx, row in enumerate(df_to_write.itertuples(index=False), start=1):
+                        numeric_vals = [(i, val) for i, val in enumerate(row) if isinstance(val, (int, float)) and not pd.isna(val)]
+                        if numeric_vals:
+                            min_val = min(val for i, val in numeric_vals)
+                            for col_num, val in numeric_vals:
+                                if val == min_val:
+                                    # tulis ulang dengan highlight & format persen
+                                    worksheet.write(row_idx, col_num, val, highlight_format)
+                    continue
+
+                # --- Default behavior untuk sheet lain ---
+                df.to_excel(writer, index=False, sheet_name=sheet)
+                workbook  = writer.book
+                worksheet = writer.sheets[sheet]
+
+                # --- Format umum ---
+                fmt_rupiah = workbook.add_format({'num_format': '#,##0'})
+                fmt_pct    = workbook.add_format({'num_format': '#,##0.0"%"'})
+
+                # Identifikasi numeric columns
+                numeric_cols = df.select_dtypes(include=["number"]).columns.tolist()
+
+                # Apply format kolom numeric / persen
+                for col_idx, col_name in enumerate(df.columns):
+                    if col_name in numeric_cols:
+                        worksheet.set_column(col_idx, col_idx, 15, fmt_rupiah)
+                    if "%" in col_name:
+                        worksheet.set_column(col_idx, col_idx, 15, fmt_pct)
+
+        output.seek(0)
+        return output.getvalue()
+
+    # --- FRAGMENT UNTUK BALLOONS ---
+    @st.fragment
+    def release_the_balloons():
+        st.balloons()
+
+    # ---- DOWNLOAD BUTTON ----
+    if selected_sheets:
+        excel_bytes = generate_multi_sheet_excel(selected_sheets, dataframes)
+
+        st.download_button(
+            label="Download",
+            data=excel_bytes,
+            file_name="Standard Deviation.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            on_click=release_the_balloons,
+            type="primary",
+            use_container_width=True,
+        )
+
