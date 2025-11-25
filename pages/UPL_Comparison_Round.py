@@ -481,7 +481,7 @@ def page():
         st.download_button(
             label="Download",
             data=excel_data,
-            file_name="Merge UPL Round.xlsx",
+            file_name="Merge Data - UPL by Round.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             icon=":material/download:",
         )
@@ -556,7 +556,7 @@ def page():
         st.download_button(
             label="Download",
             data=excel_data,
-            file_name="Pivot Table UPL by Round.xlsx",
+            file_name="Pivot Table - UPL by Round.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             icon=":material/download:",
         )
@@ -800,7 +800,7 @@ def page():
         st.download_button(
             label="Download",
             data=excel_data,
-            file_name="Round Summary.xlsx",
+            file_name="Bid & Price Analysis - UPL by Round.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             icon=":material/download:"
         )
@@ -1020,7 +1020,7 @@ def page():
         st.download_button(
             label="Download",
             data=excel_data,
-            file_name="Price Movement Trend.xlsx",
+            file_name="Price Movement Analysis - UPL by Round.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             icon=":material/download:"
         )
@@ -1340,3 +1340,140 @@ def page():
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     icon=":material/download:",
                 )
+
+    st.divider()
+
+    # SUPERRR BUTTONN
+    st.markdown("##### 🧑‍💻 Super Download — Export Selected Sheets")
+    dataframes = {
+        "Merge Data": final_df,
+        "Pivot Table": df_pivot,
+        "Bid & Price Analysis": df_filtered_summary,
+        "Price Movement Analysis": df_export
+    }
+
+    # Tampilkan multiselect
+    selected_sheets = st.multiselect(
+        "Select sheets to download in a single Excel file:",
+        options=list(dataframes.keys()),
+        default=list(dataframes.keys())  # default semua dipilih
+    )
+
+    # Fungsi "Super Button" & Formatting
+    def generate_multi_sheet_excel(selected_sheets, df_dict):
+        """
+        Buat Excel multi-sheet dengan formatting:
+        - Sheet 'Bid & Price Analysis' → highlight 1st & 2nd vendor
+        - Sheet lainnya → highlight TOTAL
+        """
+        output = BytesIO()
+
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            for sheet in selected_sheets:
+                df = df_dict[sheet].copy()
+
+                # Identifikasi num cols
+                df_to_write = df.copy()
+                numeric_cols = []
+
+                for col in df.columns:
+                    coerced = pd.to_numeric(df[col], errors="ignore")
+
+                    # Jika coercion menghasilkan setidaknya 1 angka → numeric
+                    coerced_check = pd.to_numeric(df[col], errors="coerce")
+                    if coerced_check.notna().any():
+                        numeric_cols.append(col)
+                        df_to_write[col] = coerced_check
+                    else:
+                        df_to_write[col] = df[col]
+
+                # vendor columns (hanya untuk Bid & Price Analysis)
+                vendor_cols = [c for c in numeric_cols] if sheet == "Bid & Price Analysis" else []
+
+                # Tulis dataframe ke excel 
+                df_to_write.to_excel(writer, index=False, sheet_name=sheet)
+                workbook  = writer.book
+                worksheet = writer.sheets[sheet]
+
+                # Format
+                fmt_rupiah = workbook.add_format({"num_format": "#,##0"})
+                fmt_pct    = workbook.add_format({"num_format": '#,##0.0"%"'})
+
+                fmt_total  = workbook.add_format({
+                    "bold": True,
+                    "bg_color": "#D9EAD3",
+                    "font_color": "#1A5E20",
+                    "num_format": "#,##0"
+                })
+
+                fmt_first  = workbook.add_format({"bg_color": "#C6EFCE", "num_format": "#,##0"})
+                fmt_second = workbook.add_format({"bg_color": "#FFEB9C", "num_format": "#,##0"})
+
+                # Format lagii
+                for col_idx, col_name in enumerate(df_to_write.columns):
+                    if col_name in numeric_cols:
+                        worksheet.set_column(col_idx, col_idx, 15, fmt_rupiah)
+                    if "%" in col_name:
+                        worksheet.set_column(col_idx, col_idx, 15, fmt_pct)
+
+                # Highlight
+                for row_idx, row in enumerate(df_to_write.itertuples(index=False), start=1):
+
+                    # Cek apakah baris TOTAL
+                    is_total_row = any(
+                        isinstance(x, str) and x.strip().upper() == "TOTAL"
+                        for x in row
+                        if pd.notna(x)
+                    )
+
+                    # Ambil nama 1st & 2nd vendor (jika sheet Bid & Price Analysis)
+                    if sheet == "Bid & Price Analysis":
+                        first_vendor_name = row[df.columns.get_loc("1st Vendor")]
+                        second_vendor_name = row[df.columns.get_loc("2nd Vendor")]
+
+                        first_idx = df.columns.get_loc(first_vendor_name) if first_vendor_name in vendor_cols else None
+                        second_idx = df.columns.get_loc(second_vendor_name) if second_vendor_name in vendor_cols else None
+
+                    # Loop tiap kolom → apply format
+                    for col_idx, col_name in enumerate(df_to_write.columns):
+                        value = row[col_idx]
+                        fmt = None
+
+                        # TOTAL row highlight
+                        if is_total_row and sheet != "Bid & Price Analysis":
+                            fmt = fmt_total
+
+                        # Highlight 1st & 2nd vendor
+                        if sheet == "Bid & Price Analysis":
+                            if first_idx is not None and col_idx == first_idx:
+                                fmt = fmt_first
+                            elif second_idx is not None and col_idx == second_idx:
+                                fmt = fmt_second
+
+                        # Replace NaN/inf with empty string
+                        if pd.isna(value) or (isinstance(value, float) and np.isinf(value)):
+                            worksheet.write_blank(row_idx, col_idx, None, fmt)
+                        else:
+                            worksheet.write(row_idx, col_idx, value, fmt)
+
+        output.seek(0)
+        return output
+
+    # --- FRAGMENT UNTUK BALLOONS ---
+    @st.fragment
+    def release_the_balloons():
+        st.balloons()
+
+    # ---- DOWNLOAD BUTTON ----
+    if selected_sheets:
+        excel_bytes = generate_multi_sheet_excel(selected_sheets, dataframes)
+
+        st.download_button(
+            label="Download",
+            data=excel_bytes,
+            file_name="UPL Comparison Round by Round.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            on_click=release_the_balloons,
+            type="primary",
+            use_container_width=True,
+        )

@@ -1294,74 +1294,99 @@ def page():
     # Fungsi "Super Button" & Formatting
     def generate_multi_sheet_excel(selected_sheets, df_dict):
         """
-        Buat Excel multi-sheet dengan highlight:
-        - Sheet 'Bid & Price Analysis' -> highlight 1st & 2nd vendor
-        - Sheet lainnya -> highlight row TOTAL
+        Buat Excel multi-sheet dengan formatting:
+        - Sheet 'Bid & Price Analysis' → highlight 1st & 2nd vendor
+        - Sheet lainnya → highlight TOTAL
         """
         output = BytesIO()
 
         with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
             for sheet in selected_sheets:
                 df = df_dict[sheet].copy()
-                df.to_excel(writer, index=False, sheet_name=sheet)
+
+                # Identifikasi num cols
+                df_to_write = df.copy()
+                numeric_cols = []
+
+                for col in df.columns:
+                    coerced = pd.to_numeric(df[col], errors="ignore")
+
+                    # Jika coercion menghasilkan setidaknya 1 angka → numeric
+                    coerced_check = pd.to_numeric(df[col], errors="coerce")
+                    if coerced_check.notna().any():
+                        numeric_cols.append(col)
+                        df_to_write[col] = coerced_check
+                    else:
+                        df_to_write[col] = df[col]
+
+                # vendor columns (hanya untuk Bid & Price Analysis)
+                vendor_cols = [c for c in numeric_cols] if sheet == "Bid & Price Analysis" else []
+
+                # Tulis dataframe ke excel 
+                df_to_write.to_excel(writer, index=False, sheet_name=sheet)
                 workbook  = writer.book
                 worksheet = writer.sheets[sheet]
 
-                # --- Format umum ---
-                fmt_rupiah = workbook.add_format({'num_format': '#,##0'})
-                fmt_pct    = workbook.add_format({'num_format': '#,##0.0"%"'})
+                # Format
+                fmt_rupiah = workbook.add_format({"num_format": "#,##0"})
+                fmt_pct    = workbook.add_format({"num_format": '#,##0.0"%"'})
+
                 fmt_total  = workbook.add_format({
-                    "bold": True, "bg_color": "#D9EAD3", "font_color": "#1A5E20", "num_format": "#,##0"
+                    "bold": True,
+                    "bg_color": "#D9EAD3",
+                    "font_color": "#1A5E20",
+                    "num_format": "#,##0"
                 })
-                fmt_first  = workbook.add_format({'bg_color': '#C6EFCE', "num_format": "#,##0"})
-                fmt_second = workbook.add_format({'bg_color': '#FFEB9C', "num_format": "#,##0"})
 
-                # Identifikasi numeric columns
-                numeric_cols = df.select_dtypes(include=["number"]).columns.tolist()
-                vendor_cols = [c for c in numeric_cols] if sheet == "Bid & Price Analysis" else []
+                fmt_first  = workbook.add_format({"bg_color": "#C6EFCE", "num_format": "#,##0"})
+                fmt_second = workbook.add_format({"bg_color": "#FFEB9C", "num_format": "#,##0"})
 
-                # Apply format kolom numeric / persen
-                for col_idx, col_name in enumerate(df.columns):
+                # Format lagii
+                for col_idx, col_name in enumerate(df_to_write.columns):
                     if col_name in numeric_cols:
                         worksheet.set_column(col_idx, col_idx, 15, fmt_rupiah)
                     if "%" in col_name:
                         worksheet.set_column(col_idx, col_idx, 15, fmt_pct)
 
-                # --- Highlight baris ---
-                for row_idx, row in enumerate(df.itertuples(index=False), start=1):
-                    # Cek apakah TOTAL
-                    is_total_row = any(str(x).strip().upper() == "TOTAL" for x in row if pd.notna(x))
+                # Highlight
+                for row_idx, row in enumerate(df_to_write.itertuples(index=False), start=1):
 
-                    # Ambil nama 1st & 2nd vendor untuk sheet Bid & Price Analysis
+                    # Cek apakah baris TOTAL
+                    is_total_row = any(
+                        isinstance(x, str) and x.strip().upper() == "TOTAL"
+                        for x in row
+                        if pd.notna(x)
+                    )
+
+                    # Ambil nama 1st & 2nd vendor (jika sheet Bid & Price Analysis)
                     if sheet == "Bid & Price Analysis":
                         first_vendor_name = row[df.columns.get_loc("1st Vendor")]
                         second_vendor_name = row[df.columns.get_loc("2nd Vendor")]
 
-                        # Cari index kolom vendor di vendor_cols
                         first_idx = df.columns.get_loc(first_vendor_name) if first_vendor_name in vendor_cols else None
                         second_idx = df.columns.get_loc(second_vendor_name) if second_vendor_name in vendor_cols else None
 
-                    # Loop tiap kolom
-                    for col_idx, col_name in enumerate(df.columns):
+                    # Loop tiap kolom → apply format
+                    for col_idx, col_name in enumerate(df_to_write.columns):
                         value = row[col_idx]
                         fmt = None
 
-                        # Highlight TOTAL untuk sheet selain Bid & Price Analysis
-                        if is_total_row and sheet in ["Merge Data", "Cost Summary", "Pivot Table", "Price Movement Analysis"]:
+                        # TOTAL row highlight
+                        if is_total_row and sheet != "Bid & Price Analysis":
                             fmt = fmt_total
 
-                        # Highlight 1st/2nd vendor
-                        elif sheet == "Bid & Price Analysis":
+                        # Highlight 1st & 2nd vendor
+                        if sheet == "Bid & Price Analysis":
                             if first_idx is not None and col_idx == first_idx:
                                 fmt = fmt_first
                             elif second_idx is not None and col_idx == second_idx:
                                 fmt = fmt_second
 
-                        # Tangani NaN / None / inf
-                        if pd.isna(value) or (isinstance(value, (int, float)) and np.isinf(value)):
-                            value = ""
-
-                        worksheet.write(row_idx, col_idx, value, fmt)
+                        # Replace NaN/inf with empty string
+                        if pd.isna(value) or (isinstance(value, float) and np.isinf(value)):
+                            worksheet.write_blank(row_idx, col_idx, None, fmt)
+                        else:
+                            worksheet.write(row_idx, col_idx, value, fmt)
 
         output.seek(0)
         return output
