@@ -189,7 +189,6 @@ def page():
     )
 
     # File Uploader
-    # st.subheader("📂 Upload File")
     st.markdown("##### 📂 Upload File")
     upload_file = st.file_uploader("Upload your file here!", type=["xlsx", "xls"])
 
@@ -354,67 +353,54 @@ def page():
     st.markdown("##### 🛸 Transpose Data")
     st.caption("Cross-vendor price mapping to simplify analysis and highlight pricing differences.")
 
-    df_transposed_list = []
+    df_transpose = merged_overview.copy()
 
-    for vendor, df_clean in result.items():
-        df_temp = df_clean.copy().reset_index(drop=True)
+    # Identifikasi col
+    all_cols = df_transpose.columns.tolist()
+    dynamic_cols = all_cols[1:-1]   # selain VENDOR & harga
+    num_col = all_cols[-1]
 
-        # Deteksi kolom numerik terakhir (last index)
-        numeric_cols = df_temp.select_dtypes(include=["number"]).columns
-        last_numeric_col = numeric_cols[-1] if len(numeric_cols) > 0 else None 
+    # Hapus baris total
+    df_transpose = df_transpose[df_transpose[dynamic_cols[0]].astype(str).str.upper() != "TOTAL"]
 
-        if last_numeric_col:
-            # Ambil kolom deskriptif (semua kolom selain last index)
-            non_num_cols = [c for c in df_temp.columns if c != last_numeric_col]
+    # Pivot
+    df_transpose_pivot = df_transpose.pivot_table(
+        index=dynamic_cols,
+        columns="VENDOR",
+        values=num_col,
+        aggfunc="sum"
+    ).reset_index()
 
-            # Tambahkan kolom order untuk menjaga urutan
-            df_temp["__ORDER__"] = range(len(df_temp))
+    # Tambahkan TOTAL row
+    total_row = {}
+    total_row[dynamic_cols[0]] = "TOTAL"
+    for col in dynamic_cols[1:]:
+        total_row[col] = ""
 
-            # Buat DF per vendor: deskriptif + harga
-            df_temp = df_temp[non_num_cols + ["__ORDER__", last_numeric_col]].copy()
-            df_temp.rename(columns={last_numeric_col: vendor}, inplace=True)
+    # Sum tiap kolom vendor
+    vendor_cols = [c for c in df_transpose_pivot.columns if c not in dynamic_cols]
+    for col in vendor_cols:
+        total_row[col] = df_transpose_pivot[col].sum()
 
-            df_transposed_list.append(df_temp)
+    df_transpose_total = pd.DataFrame([total_row])
 
-    # Gabungkan semua vendor berdasarkan kolom deskriptif
-    df_transposed_overview = reduce(
-        lambda left, right: pd.merge(left, right, on=non_num_cols + ["__ORDER__"], how="outer"),
-        df_transposed_list
-    )
+    # Gabungkan
+    df_transpose_final = pd.concat([df_transpose_pivot, df_transpose_total], ignore_index=True)
 
-    # Urutkan berdasarkan urutan asli
-    df_transposed_overview = df_transposed_overview.sort_values("__ORDER__").reset_index(drop=True)
-
-    # Hapus kolom __ORDER__ (tidak perlu ditampilkan)
-    df_transposed_overview.drop(columns="__ORDER__", inplace=True)
-
-    # Tambahkan baris TOTAL (sum semua kolom vendor numerik)
-    vendor_cols = [v for v in result.keys() if v in df_transposed_overview.columns]
-
-    total_row = {col: "" for col in df_transposed_overview.columns}
-    total_row[non_num_cols[0]] = "TOTAL"
-    for v in vendor_cols:
-        total_row[v] = df_transposed_overview[v].sum(skipna=True)
-
-    df_transposed_overview = pd.concat(
-        [df_transposed_overview, pd.DataFrame([total_row])],
-        ignore_index=True 
-    )
-
-    # Format Rupiah
-    df_transposed_styled = (
-        df_transposed_overview.style
+    # Format
+    df_transpose_styled = (
+        df_transpose_final.style
         .format({col: format_rupiah for col in vendor_cols})
         .apply(highlight_total_row_v2, axis=1)
     )
 
-    st.dataframe(df_transposed_styled, hide_index=True)
+    st.dataframe(df_transpose_styled, hide_index=True)
 
     # Simpan ke session
-    st.session_state["transposed_overview_upl_comparison"] = df_transposed_overview
+    st.session_state["transposed_overview_upl_comparison"] = df_transpose_final
 
     # Download
-    excel_data = get_excel_download_highlight_total(df_transposed_overview)
+    excel_data = get_excel_download_highlight_total(df_transpose_final)
     col1, col2, col3 = st.columns([2.3,2,1])
     with col3:
         st.download_button(
@@ -430,7 +416,7 @@ def page():
     # BID & PRICE ANALYSIS
     st.markdown("##### 🧠 Bid & Price Analysis")
 
-    df_analysis = df_transposed_overview.copy()
+    df_analysis = df_transpose_final.copy()
 
     # Buang baris TOTAL sebelum analisis
     df_analysis = df_analysis[df_analysis.iloc[:, 0] != "TOTAL"].reset_index(drop=True)
@@ -838,7 +824,7 @@ def page():
     st.markdown("##### 🧑‍💻 Super Download — Export Selected Sheets")
     dataframes = {
         "Merge Data": merged_overview,
-        "Transpose Data": df_transposed_overview,
+        "Transpose Data": df_transpose_final,
         "Bid & Price Analysis": df_filtered,
     }
 
