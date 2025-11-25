@@ -343,7 +343,7 @@ def page():
         st.download_button(
             label="Download",
             data=excel_data,
-            file_name="Merge UPL Comparison.xlsx",
+            file_name="Merge Data - UPL Comparison.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             icon=":material/download:",
         )
@@ -420,7 +420,7 @@ def page():
         st.download_button(
             label="Download",
             data=excel_data,
-            file_name="Transpose UPL Comparison.xlsx",
+            file_name="Transpose Data - UPL Comparison.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             icon=":material/download:",
         )
@@ -521,7 +521,7 @@ def page():
         st.download_button(
             label="Download",
             data=excel_data,
-            file_name="UPL Comparison Analysis.xlsx",
+            file_name="Bid & Price Analysis - UPL Comparison.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             icon=":material/download:"
         )
@@ -832,401 +832,113 @@ def page():
                 The dashed line represents the average gap across all vendors, serving as a benchmark ({avg_value:.1f}%).
             ''')
 
-        
-    #     # --- WIN RATE VISUALIZATION ---
-    #     st.markdown("##### Win Rate Trend")
-    #     st.caption("Visualizing 1st and 2nd place win rates across all vendors to assess competitiveness.")
+    st.divider()
 
-    #     # --- Hitung total kemenangan (1st & 2nd Vendor)
-    #     win1_counts = df_pivot["1st Vendor"].value_counts(dropna=True).reset_index()
-    #     win1_counts.columns = ["Vendor", "Wins1"]
+    # SUPERRR BUTTONN
+    st.markdown("##### 🧑‍💻 Super Download — Export Selected Sheets")
+    dataframes = {
+        "Merge Data": merged_overview,
+        "Transpose Data": df_transposed_overview,
+        "Bid & Price Analysis": df_filtered,
+    }
 
-    #     win2_counts = df_pivot["2nd Vendor"].value_counts(dropna=True).reset_index()
-    #     win2_counts.columns = ["Vendor", "Wins2"]
+    # Tampilkan multiselect
+    selected_sheets = st.multiselect(
+        "Select sheets to download in a single Excel file:",
+        options=list(dataframes.keys()),
+        default=list(dataframes.keys())  # default semua dipilih
+    )
 
-    #     # --- Hitung total partisipasi vendor ---
-    #     vendor_counts = (
-    #         df_pivot[vendor_cols]
-    #         .notna()       # True kalau vendor berpartisipasi (ada harga)
-    #         .sum()         # Hitung True per kolom
-    #         .reset_index()
-    #     )
-    #     vendor_counts.columns = ["Vendor", "Total Participations"]
+    # Fungsi "Super Button" & Formatting
+    def generate_multi_sheet_excel(selected_sheets, df_dict):
+        """
+        Buat Excel multi-sheet dengan highlight:
+        - Sheet 'Bid & Price Analysis' -> highlight 1st & 2nd vendor
+        - Sheet lainnya -> highlight row TOTAL
+        """
+        output = BytesIO()
 
-    #     # --- Gabungkan semua ---
-    #     win_rate = (
-    #         vendor_counts
-    #         .merge(win1_counts, on="Vendor", how="left")
-    #         .merge(win2_counts, on="Vendor", how="left")
-    #         .fillna(0)
-    #     )
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            for sheet in selected_sheets:
+                df = df_dict[sheet].copy()
+                df.to_excel(writer, index=False, sheet_name=sheet)
+                workbook  = writer.book
+                worksheet = writer.sheets[sheet]
 
-    #     # --- Hitung Win Rate (%)
-    #     win_rate["1st Win Rate (%)"] = np.where(
-    #         win_rate["Total Participations"] > 0,
-    #         (win_rate["Wins1"] / win_rate["Total Participations"] * 100).round(1),
-    #         0
-    #     )
-    #     win_rate["2nd Win Rate (%)"] = np.where(
-    #         win_rate["Total Participations"] > 0,
-    #         (win_rate["Wins2"] / win_rate["Total Participations"] * 100).round(1),
-    #         0
-    #     )
+                # --- Format umum ---
+                fmt_rupiah = workbook.add_format({'num_format': '#,##0'})
+                fmt_pct    = workbook.add_format({'num_format': '#,##0.0"%"'})
+                fmt_total  = workbook.add_format({
+                    "bold": True, "bg_color": "#D9EAD3", "font_color": "#1A5E20", "num_format": "#,##0"
+                })
+                fmt_first  = workbook.add_format({'bg_color': '#C6EFCE', "num_format": "#,##0"})
+                fmt_second = workbook.add_format({'bg_color': '#FFEB9C', "num_format": "#,##0"})
 
-    #     # --- Siapkan data long-format untuk visualisasi ---
-    #     win_rate_long = win_rate.melt(
-    #         id_vars=["Vendor"],
-    #         value_vars=["1st Win Rate (%)", "2nd Win Rate (%)"],
-    #         var_name="Metric",
-    #         value_name="Percentage"
-    #     )
+                # Identifikasi numeric columns
+                numeric_cols = df.select_dtypes(include=["number"]).columns.tolist()
+                vendor_cols = [c for c in numeric_cols] if sheet == "Bid & Price Analysis" else []
 
-    #     # --- Urutkan vendor berdasarkan 1st Win Rate tertinggi ---
-    #     vendor_order = (
-    #         win_rate.sort_values("1st Win Rate (%)", ascending=False)["Vendor"].tolist()
-    #     )
+                # Apply format kolom numeric / persen
+                for col_idx, col_name in enumerate(df.columns):
+                    if col_name in numeric_cols:
+                        worksheet.set_column(col_idx, col_idx, 15, fmt_rupiah)
+                    if "%" in col_name:
+                        worksheet.set_column(col_idx, col_idx, 15, fmt_pct)
 
-    #     # --- Tentukan warna untuk kedua metrik ---
-    #     metric_colors = {
-    #         "1st Win Rate (%)": "#1f77b4",
-    #         "2nd Win Rate (%)": "#ff7f0e"     # biru
-    #     }
+                # --- Highlight baris ---
+                for row_idx, row in enumerate(df.itertuples(index=False), start=1):
+                    # Cek apakah TOTAL
+                    is_total_row = any(str(x).strip().upper() == "TOTAL" for x in row if pd.notna(x))
 
-    #     # --- Highlight interaktif ---
-    #     highlight = alt.selection_point(on='mouseover', fields=['Metric'], nearest=True)
+                    # Ambil nama 1st & 2nd vendor untuk sheet Bid & Price Analysis
+                    if sheet == "Bid & Price Analysis":
+                        first_vendor_name = row[df.columns.get_loc("1st Vendor")]
+                        second_vendor_name = row[df.columns.get_loc("2nd Vendor")]
 
-    #     # --- Batas atas dan bawah sumbu Y ---
-    #     y_max = win_rate_long["Percentage"].max()
-    #     if not np.isfinite(y_max) or y_max <= 0:
-    #         y_max = 1
+                        # Cari index kolom vendor di vendor_cols
+                        first_idx = df.columns.get_loc(first_vendor_name) if first_vendor_name in vendor_cols else None
+                        second_idx = df.columns.get_loc(second_vendor_name) if second_vendor_name in vendor_cols else None
 
-    #     # Pastikan data diurutkan sesuai vendor_order
-    #     win_rate_long["Vendor"] = pd.Categorical(win_rate_long["Vendor"], categories=vendor_order, ordered=True)
-    #     win_rate_long = win_rate_long.sort_values(["Metric", "Vendor"])
+                    # Loop tiap kolom
+                    for col_idx, col_name in enumerate(df.columns):
+                        value = row[col_idx]
+                        fmt = None
 
-    #     # --- Chart utama ---
-    #     base = (
-    #         alt.Chart(win_rate_long)
-    #         .encode(
-    #             x=alt.X("Vendor:N", sort=vendor_order, title=None),
-    #             y=alt.Y(
-    #                 "Percentage:Q",
-    #                 title="Win Rate (%)",
-    #                 scale=alt.Scale(domain=[0, y_max * 1.2])
-    #             ),
-    #             color=alt.Color(
-    #                 "Metric:N",
-    #                 scale=alt.Scale(
-    #                     domain=list(metric_colors.keys()),
-    #                     range=list(metric_colors.values())
-    #                 ),
-    #                 title="Rank"
-    #             ),
-    #             tooltip=[
-    #                 alt.Tooltip("Vendor:N", title="Vendor"),
-    #                 alt.Tooltip("Metric:N", title="Position"),
-    #                 alt.Tooltip("Percentage:Q", title="Win Rate (%)", format=".1f")
-    #             ]
-    #         )
-    #     )
+                        # Highlight TOTAL untuk sheet selain Bid & Price Analysis
+                        if is_total_row and sheet in ["Merge Data", "Transpose Data"]:
+                            fmt = fmt_total
 
-    #     # --- Garis dengan titik ---
-    #     lines = base.mark_line(point=alt.OverlayMarkDef(size=70, filled=True), strokeWidth=3)
+                        # Highlight 1st/2nd vendor
+                        elif sheet == "Bid & Price Analysis":
+                            if first_idx is not None and col_idx == first_idx:
+                                fmt = fmt_first
+                            elif second_idx is not None and col_idx == second_idx:
+                                fmt = fmt_second
 
-    #     # --- Label persentase di atas titik ---
-    #     labels = base.mark_text(
-    #         align='center',
-    #         baseline='bottom',
-    #         dy=-7,
-    #         fontWeight='bold',
-    #         color='gray'
-    #     ).encode(
-    #         text=alt.Text("Percentage:Q", format=".1f")
-    #     ).transform_calculate(
-    #         label="format(datum.Percentage, '.1f') + '%'"
-    #     ).encode(
-    #         text="label:N"
-    #     )
+                        # Tangani NaN / None / inf
+                        if pd.isna(value) or (isinstance(value, (int, float)) and np.isinf(value)):
+                            value = ""
 
-    #     # --- Gabungkan semua elemen ---
-    #     chart = (
-    #         lines + labels
-    #     ).properties(
-    #         height=400,
-    #         padding={"right": 15},
-    #         title="📈 Vendor Win Rate Comparison (1st vs 2nd Place)"
-    #     ).configure_title(
-    #         anchor="middle",
-    #         offset=12
-    #     ).configure_axis(
-    #         labelFontSize=12,
-    #         titleFontSize=13
-    #     ).configure_view(
-    #         stroke='gray',
-    #         strokeWidth=1
-    #     ).configure_legend(
-    #         titleFontSize=12,
-    #         titleFontWeight="bold",
-    #         labelFontSize=12,
-    #         labelLimit=300,
-    #         orient="bottom"
-    #     )
+                        worksheet.write(row_idx, col_idx, value, fmt)
 
-    #     # --- Tampilkan chart di Streamlit
-    #     st.altair_chart(chart)
+        output.seek(0)
+        return output
 
-    #     # Kolom yang mau ditaruh di depan
-    #     cols_front = ["Wins1", "Wins2"]
+    # --- FRAGMENT UNTUK BALLOONS ---
+    @st.fragment
+    def release_the_balloons():
+        st.balloons()
 
-    #     # Sisanya (Vendor + kolom lain yang tidak ada di cols_front)
-    #     cols_rest = [c for c in win_rate.columns if c not in cols_front]
+    # ---- DOWNLOAD BUTTON ----
+    if selected_sheets:
+        excel_bytes = generate_multi_sheet_excel(selected_sheets, dataframes)
 
-    #     # Gabungkan urutannya
-    #     win_rate = win_rate[cols_rest[:1] + cols_front + cols_rest[1:]]
-
-    #     # --- Ganti nama kolom biar lebih konsisten & enak dibaca
-    #     df_summary = win_rate.rename(columns={
-    #         "Wins1": "1st Rank",
-    #         "Wins2": "2nd Rank"
-    #     })
-
-    #     with st.expander("See explanation"):
-    #         st.write('''
-    #             The visualization above compares the win rate of each vendor
-    #             based on how often they achieved 1st or 2nd place in all
-    #             tender evaluations.  
-                     
-    #             **💡 How to interpret the chart**  
-                     
-    #             - High 1st Win Rate (%)  
-    #               Vendor is highly competitive and often offers the best commercial terms.  
-    #             - High 2nd Win Rate (%)  
-    #               Vendor consistently performs well, often just slightly less competitive than the winner.  
-    #             - Large Gap Between 1st & 2nd Win Rate  
-    #               Shows clear market dominance by certain vendors.
-    #         ''')
-    #         st.dataframe(df_summary, hide_index=True)
-            
-    #         # Download button to Excel
-    #         @st.cache_data
-    #         def get_excel_download(df_summary, sheet_name="Win Rate Trend Summary"):
-    #             output = BytesIO()
-    #             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-    #                 df_summary.to_excel(writer, index=False, sheet_name=sheet_name)
-    #             return output.getvalue()
-
-    #         # Simpan hasil ke variabel
-    #         excel_data = get_excel_download(df_summary, sheet_name="Win Rate Trend Summary")
-
-    #         # Layout tombol (rata kanan)
-    #         col1, col2, col3 = st.columns([3,1,1])
-    #         with col3:
-    #             st.download_button(
-    #                 label="Download",
-    #                 data=excel_data,
-    #                 file_name="Win Rate Trend Summary.xlsx",
-    #                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    #                 icon=":material/download:",
-    #                 key=f"download_Win_Rate_Trend"
-    #             )
-
-    #     st.write("")
-
-    #     # --- AVERAGE GAP VISUALIZATION ---
-    #     st.markdown("##### Average Gap Trend")
-    #     st.caption("Visualizing trend of the average gap between 1st and 2nd lowest bids.")
-
-    #     # --- Hitung rata-rata Gap 1 to 2 (%) per Vendor (hanya untuk 1st Vendor)
-    #     df_gap = df_pivot.copy()
-
-    #     # Ubah kolom 'Gap 1 to 2 (%)' ke numerik (hapus simbol %)
-    #     df_gap["Gap 1 to 2 (%)"] = (
-    #         df_gap["Gap 1 to 2 (%)"]
-    #         .replace("%", "", regex=True)
-    #         .astype(float)
-    #     )
-
-    #     # Hitung rata-rata gap per vendor (hanya vendor yang jadi 1st Lowest)
-    #     avg_gap = (
-    #         df_gap.groupby("1st Vendor", dropna=True)["Gap 1 to 2 (%)"]
-    #         .mean()
-    #         .reset_index()
-    #         .rename(columns={"1st Vendor": "Vendor", "Gap 1 to 2 (%)": "Average Gap (%)"})
-    #         .sort_values("Average Gap (%)", ascending=False)
-    #     )
-
-    #     # st.dataframe(avg_gap)
-
-    #     # Warna per vendor (biar konsisten kalau kamu sudah punya color mapping)
-    #     colors_list = ["#F94144", "#F3722C", "#F8961E", "#F9C74F", "#90BE6D",
-    #                 "#43AA8B", "#577590", "#E54787", "#BF219A", "#8E0F9C", "#4B1D91"]
-    #     vendor_colors = {v: c for v, c in zip(avg_gap["Vendor"].unique(), colors_list)}
-
-    #     # Interaksi hover
-    #     highlight = alt.selection_point(on='mouseover', fields=['Vendor'], nearest=True)
-
-    #     # --- Chart utama ---
-    #     bars = (
-    #         alt.Chart(avg_gap)
-    #         .mark_bar()
-    #         .encode(
-    #             x=alt.X("Vendor:N", sort='-y', title=None),
-    #             y=alt.Y("Average Gap (%):Q", title="Average Gap (%)", scale=alt.Scale(domain=[0, avg_gap["Average Gap (%)"].max() * 1.2])),
-    #             color=alt.Color("Vendor:N",
-    #                             scale=alt.Scale(domain=list(vendor_colors.keys()), range=list(vendor_colors.values())),
-    #                             legend=None),
-    #             tooltip=[
-    #                 alt.Tooltip("Vendor:N", title="Vendor"),
-    #                 alt.Tooltip("Average Gap (%):Q", title="Average Gap (%)", format=".1f")
-    #             ]
-    #         )
-    #         .add_params(highlight)
-    #     )
-
-    #     # Label teks di atas bar
-    #     labels = (
-    #         alt.Chart(avg_gap)
-    #         .mark_text(dy=-7, fontWeight='bold', color='gray')
-    #         .encode(
-    #             x="Vendor:N",
-    #             y="Average Gap (%):Q",
-    #             text=alt.Text("Average Gap (%):Q", format=".1f")  # Format angka
-    #         )
-    #         .transform_calculate(  # Tambahkan simbol %
-    #             label_text="format(datum['Average Gap (%)'], '.1f') + '%'"
-    #         )
-    #         .encode(
-    #             text="label_text:N"
-    #         )
-    #     )
-
-    #     # Frame luar untuk gaya rapi
-    #     frame = alt.Chart().mark_rect(stroke='gray', strokeWidth=1, fillOpacity=0)
-
-    #     avg_line = alt.Chart(avg_gap).mark_rule(color='gray', strokeDash=[4,2], size=1.75).encode(
-    #         y='mean(Average Gap (%)):Q'
-    #     )
-
-    #     # Gabungkan semua elemen
-    #     chart = (bars + labels + frame + avg_line).properties(
-    #         title="Average Gap (%) per 1st Vendor",
-    #         height=400
-    #     ).configure_title(
-    #         anchor='middle',
-    #         offset=12
-    #     ).configure_axis(
-    #         labelFontSize=12,
-    #         titleFontSize=13
-    #     ).configure_view(
-    #         stroke='gray',
-    #         strokeWidth=1
-    #     )
-
-    #     # --- Tampilkan di Streamlit ---
-    #     st.altair_chart(chart)
-
-    #     avg_value = avg_gap["Average Gap (%)"].mean()
-    #     with st.expander("See explanation"):
-    #         st.write(f'''
-    #             The chart above shows the average price difference between 
-    #             the lowest and second-lowest bids for each vendor when they 
-    #             rank 1st, indicating their pricing dominance or competitiveness.
-                     
-    #             **💡 How to interpret the chart**  
-                     
-    #             - High Gap  
-    #               High gap indicates strong vendor dominance (much lower prices).  
-    #             - Low Gap  
-    #               Low gap indicates intense competition with similar pricing among vendors.  
-                
-    #             The dashed line represents the average gap across all vendors, serving as a benchmark ({avg_value:.1f}%).
-    #         ''')
-
-    #     st.divider()
-
-    #     # ---------- MEDIAN ---------- 
-    #     st.subheader("🎯 Median Price & Vendor Deviation")
-    #     st.caption("Shows each vendor’s percentage deviation from the median price — lower means more competitive.")
-
-    #     # --- Hitung median per baris (berdasarkan vendor columns) ---
-    #     df_median = df_pivot.copy()
-
-    #     # Pastikan kolom vendor numeric dulu sebelum hitung median
-    #     for v in vendor_cols:
-    #         df_median[v] = pd.to_numeric(df_median[v].replace("", np.nan).astype(str).str.replace(".", ""), errors="coerce")
-
-    #     # Hitung median tiap baris (berdasarkan vendor)
-    #     df_median["Median"] = df_median[vendor_cols].median(axis=1, skipna=True)
-
-    #     # Hitung gap tiap vendor terhadap median (%)
-    #     for v in vendor_cols:
-    #         df_median[f"{v} to Median (%)"] = df_median.apply(
-    #             lambda row: (
-    #                 f"{((row[v] - row['Median']) / row['Median'] * 100):.1f}%"
-    #                 if pd.notna(row[v]) and pd.notna(row['Median']) and row['Median'] != 0
-    #                 else ""
-    #             ),
-    #             axis=1
-    #         )
-
-    #     # Ambil hanya kolom yang diperlukan
-    #     cols_final = list(info_cols) + ["Median"] + [f"{v} to Median (%)" for v in vendor_cols]
-    #     df_median = df_median[cols_final]
-
-    #     df_export_median = df_median.copy()
-
-    #     # Optional: format Median jadi ribuan
-    #     df_median["Median"] = df_median["Median"].apply(
-    #         lambda x: f"{int(round(x)):,}".replace(",", ".") if pd.notna(x) else ""
-    #     )
-
-    #     # --- Fungsi untuk meng-highlight vendor dengan gap (%) terendah ---
-    #     def highlight_lowest_median(s):
-    #         # ambil hanya kolom vendor yang berisi persentase ke median
-    #         vendor_cols_pct = [c for c in s.index if c.endswith("to Median (%)")]
-
-    #         # konversi ke float (abaikan % dan kosong)
-    #         vals = s[vendor_cols_pct].replace("", np.nan).str.replace("%", "").astype(float)
-
-    #         # cari nilai minimum
-    #         if vals.notna().any():
-    #             min_val = vals.min()
-    #         else:
-    #             min_val = None
-
-    #         # siapkan style per kolom
-    #         styles = []
-    #         for c in s.index:
-    #             if c in vendor_cols_pct and pd.notna(min_val) and float(str(s[c]).replace("%", "")) == min_val:
-    #                 styles.append("background-color: #f8c8dc; color: #7a1f47;")
-    #             else:
-    #                 styles.append("")
-    #         return styles
-
-    #     # --- Terapkan styling ---
-    #     df_median_styled = df_median.style.apply(highlight_lowest_median, axis=1)
-
-    #     st.dataframe(df_median_styled, hide_index=True)
-
-    #     # Download button to Excel
-    #     @st.cache_data
-    #     def get_excel_download(df_export_median, sheet_name="Median Analysis (%)"):
-    #         output = BytesIO()
-    #         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-    #             df_export_median.to_excel(writer, index=False, sheet_name=sheet_name)
-    #         return output.getvalue()
-
-    #     # Simpan hasil ke variabel
-    #     excel_data = get_excel_download(df_export_median, sheet_name=f"Median Analysis (%)")
-
-    #     # Layout tombol (rata kanan)
-    #     col1, col2, col3 = st.columns([3,1,1])
-    #     with col3:
-    #         st.download_button(
-    #             label="Download",
-    #             data=excel_data,
-    #             file_name=f"Median Analysis (%).xlsx",
-    #             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    #             icon=":material/download:",
-    #             key=f"download_median"
-    #         )
+        st.download_button(
+            label="Download",
+            data=excel_bytes,
+            file_name="UPL Comparison.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            on_click=release_the_balloons,
+            type="primary",
+            use_container_width=True,
+        )
