@@ -455,10 +455,10 @@ def page():
         all_rounds.append(df_clean)
 
     # STEP 4: MERGE SEMUA FILEE
-    df_final = pd.concat(all_rounds, ignore_index=True)
+    df_merge = pd.concat(all_rounds, ignore_index=True)
 
     # Simpan ke session
-    st.session_state["merge_tco_by_round"] = df_final
+    st.session_state["merge_tco_by_round"] = df_merge
     st.session_state["already_processed_tco_by_round"] = True
 
     st.divider()
@@ -468,25 +468,25 @@ def page():
     st.caption(f"Successfully consolidated data from **{len(files_to_process)} files**.")
 
     # Pembulatan
-    num_cols = df_final.select_dtypes(include=["number"]).columns
-    df_final[num_cols] = df_final[num_cols].apply(round_half_up)
+    num_cols = df_merge.select_dtypes(include=["number"]).columns
+    df_merge[num_cols] = df_merge[num_cols].apply(round_half_up)
 
     # Format rupiah
-    df_styled = (
-        df_final.style
+    df_merge_styled = (
+        df_merge.style
         .format({col: format_rupiah for col in num_cols})
         .apply(highlight_total_row_v2, axis=1)
     )
-    st.dataframe(df_styled, hide_index=True)
+    st.dataframe(df_merge_styled, hide_index=True)
 
     # Download
-    excel_data = get_excel_download_highlight_total(df_final)
+    excel_data = get_excel_download_highlight_total(df_merge)
     col1, col2, col3 = st.columns([2.3,2,1])
     with col3:
         st.download_button(
             label="Download",
             data=excel_data,
-            file_name="Merge TCO Round.xlsx",
+            file_name="Merge Data - TCO by Round.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             icon=":material/download:",
         )
@@ -497,14 +497,14 @@ def page():
     st.markdown("##### 📑 Cost Summary")
 
     # Ambil semua kolom kecuali "ROUND"
-    non_round_cols = [c for c in df_final.columns if c != "ROUND"]
+    non_round_cols = [c for c in df_merge.columns if c != "ROUND"]
 
     # Identifikasi kolom
-    scope_cols = df_final[non_round_cols].select_dtypes(exclude=["number"]).columns.tolist()
-    vendor_cols = df_final[non_round_cols].select_dtypes(include=['number']).columns.tolist()
+    scope_cols = df_merge[non_round_cols].select_dtypes(exclude=["number"]).columns.tolist()
+    vendor_cols = df_merge[non_round_cols].select_dtypes(include=['number']).columns.tolist()
 
     # Melt (Unpivot)
-    df_summary = df_final.melt(
+    df_summary = df_merge.melt(
         id_vars=["ROUND"] + scope_cols,
         value_vars=vendor_cols,
         var_name="VENDOR",
@@ -570,7 +570,7 @@ def page():
         st.download_button(
             label="Download",
             data=excel_data,
-            file_name="Cost Summary TCO Round.xlsx",
+            file_name="Cost Summary - TCO by Round.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             icon=":material/download:",
         )
@@ -581,8 +581,8 @@ def page():
     st.markdown("##### 🛸 Pivot Table")
     st.caption("Pivoted price comparison table showing vendor offers per round for each item.")
 
-    total = df_final.columns[1]
-    df_ptable = df_final[df_final[total] != "TOTAL"].copy()
+    total = df_merge.columns[1]
+    df_ptable = df_merge[df_merge[total] != "TOTAL"].copy()
 
     non_round_cols = [c for c in df_ptable.columns if c != "ROUND"]
     scope_cols = df_ptable[non_round_cols].select_dtypes(exclude=["number"]).columns.tolist()
@@ -645,7 +645,7 @@ def page():
         st.download_button(
             label="Download",
             data=excel_data,
-            file_name="Pivot Table TCO by Round.xlsx",
+            file_name="Pivot Table - TCO by Round.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             icon=":material/download:",
         )
@@ -656,8 +656,8 @@ def page():
     st.markdown("##### 🧠 Bid & Price Analysis")
 
     # Hapus row total 
-    df_analysis = df_final[
-        ~df_final.apply(lambda row: row.astype(str).str.contains("TOTAL", case=False))
+    df_analysis = df_merge[
+        ~df_merge.apply(lambda row: row.astype(str).str.contains("TOTAL", case=False))
         .any(axis=1)
     ].copy()
 
@@ -948,7 +948,7 @@ def page():
         st.download_button(
             label="Download",
             data=excel_data,
-            file_name="Price Movement Trend - TCO by Round.xlsx",
+            file_name="Price Movement Analysis - TCO by Round.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             icon=":material/download:"
         )
@@ -1271,3 +1271,116 @@ def page():
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     icon=":material/download:",
                 )
+
+    st.divider()
+
+    # SUPERRR BUTTONN
+    st.markdown("##### 🧑‍💻 Super Download — Export Selected Sheets")
+    dataframes = {
+        "Merge Data": df_merge,
+        "Cost Summary": df_filtered,
+        "Pivot Table": df_ppivot,
+        "Bid & Price Analysis": df_filtered_analysis,
+        "Price Movement Analysis": df_export
+    }
+
+    # Tampilkan multiselect
+    selected_sheets = st.multiselect(
+        "Select sheets to download in a single Excel file:",
+        options=list(dataframes.keys()),
+        default=list(dataframes.keys())  # default semua dipilih
+    )
+
+    # Fungsi "Super Button" & Formatting
+    def generate_multi_sheet_excel(selected_sheets, df_dict):
+        """
+        Buat Excel multi-sheet dengan highlight:
+        - Sheet 'Bid & Price Analysis' -> highlight 1st & 2nd vendor
+        - Sheet lainnya -> highlight row TOTAL
+        """
+        output = BytesIO()
+
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            for sheet in selected_sheets:
+                df = df_dict[sheet].copy()
+                df.to_excel(writer, index=False, sheet_name=sheet)
+                workbook  = writer.book
+                worksheet = writer.sheets[sheet]
+
+                # --- Format umum ---
+                fmt_rupiah = workbook.add_format({'num_format': '#,##0'})
+                fmt_pct    = workbook.add_format({'num_format': '#,##0.0"%"'})
+                fmt_total  = workbook.add_format({
+                    "bold": True, "bg_color": "#D9EAD3", "font_color": "#1A5E20", "num_format": "#,##0"
+                })
+                fmt_first  = workbook.add_format({'bg_color': '#C6EFCE', "num_format": "#,##0"})
+                fmt_second = workbook.add_format({'bg_color': '#FFEB9C', "num_format": "#,##0"})
+
+                # Identifikasi numeric columns
+                numeric_cols = df.select_dtypes(include=["number"]).columns.tolist()
+                vendor_cols = [c for c in numeric_cols] if sheet == "Bid & Price Analysis" else []
+
+                # Apply format kolom numeric / persen
+                for col_idx, col_name in enumerate(df.columns):
+                    if col_name in numeric_cols:
+                        worksheet.set_column(col_idx, col_idx, 15, fmt_rupiah)
+                    if "%" in col_name:
+                        worksheet.set_column(col_idx, col_idx, 15, fmt_pct)
+
+                # --- Highlight baris ---
+                for row_idx, row in enumerate(df.itertuples(index=False), start=1):
+                    # Cek apakah TOTAL
+                    is_total_row = any(str(x).strip().upper() == "TOTAL" for x in row if pd.notna(x))
+
+                    # Ambil nama 1st & 2nd vendor untuk sheet Bid & Price Analysis
+                    if sheet == "Bid & Price Analysis":
+                        first_vendor_name = row[df.columns.get_loc("1st Vendor")]
+                        second_vendor_name = row[df.columns.get_loc("2nd Vendor")]
+
+                        # Cari index kolom vendor di vendor_cols
+                        first_idx = df.columns.get_loc(first_vendor_name) if first_vendor_name in vendor_cols else None
+                        second_idx = df.columns.get_loc(second_vendor_name) if second_vendor_name in vendor_cols else None
+
+                    # Loop tiap kolom
+                    for col_idx, col_name in enumerate(df.columns):
+                        value = row[col_idx]
+                        fmt = None
+
+                        # Highlight TOTAL untuk sheet selain Bid & Price Analysis
+                        if is_total_row and sheet in ["Merge Data", "Cost Summary", "Pivot Table", "Price Movement Analysis"]:
+                            fmt = fmt_total
+
+                        # Highlight 1st/2nd vendor
+                        elif sheet == "Bid & Price Analysis":
+                            if first_idx is not None and col_idx == first_idx:
+                                fmt = fmt_first
+                            elif second_idx is not None and col_idx == second_idx:
+                                fmt = fmt_second
+
+                        # Tangani NaN / None / inf
+                        if pd.isna(value) or (isinstance(value, (int, float)) and np.isinf(value)):
+                            value = ""
+
+                        worksheet.write(row_idx, col_idx, value, fmt)
+
+        output.seek(0)
+        return output
+
+    # --- FRAGMENT UNTUK BALLOONS ---
+    @st.fragment
+    def release_the_balloons():
+        st.balloons()
+
+    # ---- DOWNLOAD BUTTON ----
+    if selected_sheets:
+        excel_bytes = generate_multi_sheet_excel(selected_sheets, dataframes)
+
+        st.download_button(
+            label="Download",
+            data=excel_bytes,
+            file_name="TCO Comparison Round by Round.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            on_click=release_the_balloons,
+            type="primary",
+            use_container_width=True,
+        )
