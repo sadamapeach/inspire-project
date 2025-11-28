@@ -428,20 +428,31 @@ def page():
     for v in vendor_cols:
         df_analysis[v] = pd.to_numeric(df_analysis[v], errors="coerce")
 
-    # Hitung 1st dan 2nd lowest
-    df_analysis["1st Lowest"] = df_analysis[vendor_cols].min(axis=1)
-    df_analysis["1st Vendor"] = df_analysis[vendor_cols].idxmin(axis=1)
+    # Penanganan untuk 0 value
+    vendor_values = df_analysis[vendor_cols].copy()
+    vendor_values = vendor_values.replace(0, pd.NA)
 
-    # Untuk 2nd lowest, ganti nilai lowest jadi NaN dulu, lalu cari min lagi
-    temp = df_analysis[vendor_cols].mask(df_analysis[vendor_cols].eq(df_analysis["1st Lowest"], axis=0))
+    # Hitung 1st dan 2nd lowest
+    df_analysis["1st Lowest"] = vendor_values.min(axis=1)
+    df_analysis["1st Vendor"] = vendor_values.idxmin(axis=1)
+
+    # Hitung 2nd Lowest
+    # Hilangkan dulu nilai 1st Lowest dari kandidat (agar kita dapat 2nd Lowest yang benar)
+    temp = vendor_values.mask(vendor_values.eq(df_analysis["1st Lowest"], axis=0))
+
     df_analysis["2nd Lowest"] = temp.min(axis=1)
     df_analysis["2nd Vendor"] = temp.idxmin(axis=1)
+
+    # --- FIX: Pastikan numeric ---
+    df_analysis["1st Lowest"] = pd.to_numeric(df_analysis["1st Lowest"], errors="coerce")
+    df_analysis["2nd Lowest"] = pd.to_numeric(df_analysis["2nd Lowest"], errors="coerce")
 
     # Hitung gap antara 1st dan 2nd lowest (%)
     df_analysis["Gap 1 to 2 (%)"] = ((df_analysis["2nd Lowest"] - df_analysis["1st Lowest"]) / df_analysis["1st Lowest"] * 100).round(2)
 
     # Hitung median price
-    df_analysis["Median Price"] = df_analysis[vendor_cols].median(axis=1)
+    df_analysis["Median Price"] = vendor_values.median(axis=1)
+    df_analysis["Median Price"] = pd.to_numeric(df_analysis["Median Price"], errors="coerce")
 
     # Hitung selisih tiap vendor dengan median (%)
     for v in vendor_cols:
@@ -707,9 +718,8 @@ def page():
                 )
 
     # --- AVERAGE GAP VISUALIZATION ---
-    df_avg_gap = df_analysis.copy()
     # --- Hitung rata-rata Gap 1 to 2 (%) per Vendor (hanya untuk 1st Vendor)
-    df_gap = df_avg_gap.copy()
+    df_gap = df_analysis.copy()
 
     # Ubah kolom 'Gap 1 to 2 (%)' ke numerik (hapus simbol %)
     df_gap["Gap 1 to 2 (%)"] = (

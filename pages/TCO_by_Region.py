@@ -1640,8 +1640,6 @@ def page():
                 .sort_values("Average Gap (%)", ascending=False)
             )
 
-            # st.dataframe(avg_gap)
-
             # Warna per vendor (biar konsisten kalau kamu sudah punya color mapping)
             colors_list = ["#F94144", "#F3722C", "#F8961E", "#F9C74F", "#90BE6D",
                         "#43AA8B", "#577590", "#E54787", "#BF219A", "#8E0F9C", "#4B1D91"]
@@ -1650,12 +1648,18 @@ def page():
             # Interaksi hover
             highlight = alt.selection_point(on='mouseover', fields=['Vendor'], nearest=True)
 
+            # Pastikan tidak ada inf/NaN pada max
+            y_max = avg_gap["Average Gap (%)"].replace([np.inf, -np.inf], np.nan).max()
+            if pd.isna(y_max):
+                y_max = 0
+
             # --- Chart utama ---
             bars = (
                 alt.Chart(avg_gap)
                 .mark_bar()
                 .encode(
                     x=alt.X("Vendor:N", sort='-y', title=None),
+                    # y=alt.Y("Average Gap (%):Q", title="Average Gap (%)", scale=alt.Scale(domain=[0, y_max * 1.2])),
                     y=alt.Y("Average Gap (%):Q", title="Average Gap (%)", scale=alt.Scale(domain=[0, avg_gap["Average Gap (%)"].max() * 1.2])),
                     color=alt.Color("Vendor:N",
                                     scale=alt.Scale(domain=list(vendor_colors.keys()), range=list(vendor_colors.values())),

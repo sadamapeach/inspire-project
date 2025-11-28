@@ -1182,27 +1182,28 @@ def page():
             )
     )
 
-    labels = (
-        alt.Chart(trend_summary)
-            .mark_text(
-                dy=-7,                # geser sedikit ke atas
-                fontSize=10,
-                fontWeight="bold",
-                color="gray",
-            )
-            .encode(
-                x=alt.X(
-                    "PRICE TREND:N",
-                    sort=trend_order
-                ),
-                y=alt.Y("Count:Q"),
-                text="Count:Q",
-                xOffset=f"{vendor_col}:N"   # penting: supaya posisinya sama dengan bar!
-            )
-    )
+    # labels = (
+    #     alt.Chart(trend_summary)
+    #         .mark_text(
+    #             dy=-7,                # geser sedikit ke atas
+    #             fontSize=10,
+    #             fontWeight="bold",
+    #             color="gray",
+    #         )
+    #         .encode(
+    #             x=alt.X(
+    #                 "PRICE TREND:N",
+    #                 sort=trend_order
+    #             ),
+    #             y=alt.Y("Count:Q"),
+    #             text="Count:Q",
+    #             xOffset=f"{vendor_col}:N"   # penting: supaya posisinya sama dengan bar!
+    #         )
+    # )
 
     trend_chart = (
-        (bars + labels)
+        # (bars + labels)
+        bars
             .properties(
                 height=400,
                 padding={"right": 15},
@@ -1309,7 +1310,10 @@ def page():
                 numeric_cols = []
 
                 for col in df.columns:
-                    coerced = pd.to_numeric(df[col], errors="ignore")
+                    try:
+                        df[col] = pd.to_numeric(df[col])
+                    except:
+                        continue
 
                     # Jika coercion menghasilkan setidaknya 1 angka → numeric
                     coerced_check = pd.to_numeric(df[col], errors="coerce")

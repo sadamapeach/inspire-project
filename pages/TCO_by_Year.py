@@ -657,20 +657,35 @@ def page():
         df_analysis[first_non_numeric].astype(str).str.upper() != "TOTAL"
     ].copy()
 
+    # Penanganan untuk 0 value
+    vendor_values = df_no_total[vendor_cols].copy()
+    vendor_values = vendor_values.replace(0, pd.NA)
+
     # Hitung nilai analisis per baris
-    df_no_total["1st Lowest"] = df_no_total[vendor_cols].min(axis=1)
-    df_no_total["1st Vendor"] = df_no_total[vendor_cols].idxmin(axis=1)
+    df_no_total["1st Lowest"] = vendor_values.min(axis=1)
+    df_no_total["1st Vendor"] = vendor_values.idxmin(axis=1)
 
-    # Kedua terendah (2nd lowest)
-    def second_lowest(row):
-        sorted_vals = sorted([(v, k) for k, v in row[vendor_cols].items() if pd.notnull(v)])
-        if len(sorted_vals) > 1:
-            return sorted_vals[1]
-        return (np.nan, np.nan)
+    # Hitung 2nd Lowest
+    # Hilangkan dulu nilai 1st Lowest dari kandidat (agar kita dapat 2nd Lowest yang benar)
+    temp = vendor_values.mask(vendor_values.eq(df_no_total["1st Lowest"], axis=0))
 
-    df_no_total[["2nd Lowest", "2nd Vendor"]] = df_no_total.apply(
-        lambda row: pd.Series(second_lowest(row)), axis=1
-    )
+    df_no_total["2nd Lowest"] = temp.min(axis=1)
+    df_no_total["2nd Vendor"] = temp.idxmin(axis=1)
+
+    # --- FIX: Pastikan numeric ---
+    df_no_total["1st Lowest"] = pd.to_numeric(df_no_total["1st Lowest"], errors="coerce")
+    df_no_total["2nd Lowest"] = pd.to_numeric(df_no_total["2nd Lowest"], errors="coerce")
+
+    # # Kedua terendah (2nd lowest)
+    # def second_lowest(row):
+    #     sorted_vals = sorted([(v, k) for k, v in row[vendor_cols].items() if pd.notnull(v)])
+    #     if len(sorted_vals) > 1:
+    #         return sorted_vals[1]
+    #     return (np.nan, np.nan)
+
+    # df_no_total[["2nd Lowest", "2nd Vendor"]] = df_no_total.apply(
+    #     lambda row: pd.Series(second_lowest(row)), axis=1
+    # )
 
     # Hitung Gap 1 to 2 (%)
     df_no_total["Gap 1 to 2 (%)"] = (
@@ -678,8 +693,9 @@ def page():
         / df_no_total["1st Lowest"] * 100
     ).round(2)
 
-    # Hitung Median Price
-    df_no_total["Median Price"] = df_no_total[vendor_cols].median(axis=1)
+    # Hitung median price
+    df_no_total["Median Price"] = vendor_values.median(axis=1)
+    df_no_total["Median Price"] = pd.to_numeric(df_no_total["Median Price"], errors="coerce")
 
     # Hitung deviasi tiap vendor terhadap median
     for v in vendor_cols:
