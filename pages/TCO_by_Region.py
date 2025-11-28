@@ -589,8 +589,8 @@ def page():
 
     tab1.markdown(
         f"""
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-            <div style="font-size:0.9rem; color:gray;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+            <div style="font-size:0.88rem; color:gray;">
                 ✨ Total number of data entries: <b>{len(df_filtered_analysis)}</b>
             </div>
             <div style="text-align:right;">

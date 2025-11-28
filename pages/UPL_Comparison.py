@@ -419,7 +419,12 @@ def page():
     df_analysis = df_transpose_final.copy()
 
     # Buang baris TOTAL sebelum analisis
-    df_analysis = df_analysis[df_analysis.iloc[:, 0] != "TOTAL"].reset_index(drop=True)
+    df_analysis = df_analysis[
+        ~df_analysis.apply(
+            lambda row: row.astype(str).str.upper().eq("TOTAL").any(),
+            axis=1
+        )
+    ].copy()
 
     # Deteksi kolom vendor (numerik)
     vendor_cols = df_analysis.select_dtypes(include=["number"]).columns.tolist()
@@ -502,7 +507,22 @@ def page():
         .apply(lambda row: highlight_1st_2nd_vendor(row, df_filtered.columns), axis=1)
     )
 
-    st.caption(f"✨ Total number of data entries: **{len(df_filtered)}**")
+    st.markdown(
+        f"""
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+            <div style="font-size:0.88rem; color:gray;">
+                ✨ Total number of data entries: <b>{len(df_filtered)}</b>
+            </div>
+            <div style="text-align:right;">
+                <span style="background:#C6EFCE; padding:2px 8px; border-radius:6px; font-weight:600; font-size: 0.75rem; color: black">1st Lowest</span>
+                &nbsp;
+                <span style="background:#FFEB9C; padding:2px 8px; border-radius:6px; font-weight:600; font-size: 0.75rem; color: black">2nd Lowest</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
     st.dataframe(df_analysis_styled, hide_index=True)
 
     # Simpan hasil ke variabel
@@ -534,8 +554,7 @@ def page():
 
     # --- Hitung total partisipasi vendor ---
     vendor_counts = (
-        df_win_rate[vendor_cols]
-        .notna()       # True kalau vendor berpartisipasi (ada harga)
+        (df_win_rate[vendor_cols].fillna(0) > 0)   # hanya True jika nilai > 0
         .sum()         # Hitung True per kolom
         .reset_index()
     )

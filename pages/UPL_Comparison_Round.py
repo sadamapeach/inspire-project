@@ -676,9 +676,6 @@ def page():
     analysis_results = {}
 
     round_col = df_summary.columns[0]
-    scope_col = scope_cols[0]
-    dynamic_cols = scope_cols[1:]
-    vendor_cols = [c for c in df_summary.columns if c not in [round_col, *scope_cols]]
 
     for round_name, df_round in df_summary.groupby(round_col):
         # Skip TOTAL
@@ -686,35 +683,45 @@ def page():
             continue
 
         # Hapus baris TOTAL per round
-        df_clean = df_round[df_round[scope_col] != "TOTAL"].copy()
+        df_clean = df_round[
+            ~df_round.apply(
+                lambda row: row.astype(str).str.upper().eq("TOTAL").any(),
+                axis=1
+            )
+        ].copy()
 
-        # Hitung 1st & 2nd lowest
-        df_clean["1st Lowest"] = df_clean[vendor_cols].min(axis=1)
-        df_clean["1st Vendor"] = df_clean[vendor_cols].idxmin(axis=1)
+        # Kolom vendor dinamis
+        vendor_cols = df_summary.select_dtypes(include=["number"]).columns.tolist()
 
-        # untuk 2nd lowest -> sort values per row
-        df_clean["2nd Lowest"] = df_clean[vendor_cols].apply(
-            lambda row: row.nsmallest(2).iloc[-1] if len(row.dropna()) >= 2 else np.nan,
-            axis=1
-        )
-        df_clean["2nd Vendor"] = df_clean[vendor_cols].apply(
-            lambda row: row.nsmallest(2).index[-1] if len(row.dropna()) >= 2 else "",
-            axis=1
-        )
+        # Penanganan untuk 0 value
+        vendor_values = df_summary[vendor_cols].copy()
+        vendor_values = vendor_values.replace(0, pd.NA)
 
-        # Gap %
-        df_clean["Gap 1 to 2 (%)"] = (
-            (df_clean["2nd Lowest"] - df_clean["1st Lowest"]) / df_clean["1st Lowest"] * 100
-        ).round(2)
+        # Hitung 1st dan 2nd lowest
+        df_clean["1st Lowest"] = vendor_values.min(axis=1)
+        df_clean["1st Vendor"] = vendor_values.idxmin(axis=1)
 
-        # Median price
-        df_clean["Median Price"] = df_clean[vendor_cols].median(axis=1)
+        # Hitung 2nd Lowest
+        # Hilangkan dulu nilai 1st Lowest dari kandidat (agar kita dapat 2nd Lowest yang benar)
+        temp = vendor_values.mask(vendor_values.eq(df_clean["1st Lowest"], axis=0))
 
-        # Vendor → Median (%)
+        df_clean["2nd Lowest"] = temp.min(axis=1)
+        df_clean["2nd Vendor"] = temp.idxmin(axis=1)
+
+        # --- FIX: Pastikan numeric ---
+        df_clean["1st Lowest"] = pd.to_numeric(df_clean["1st Lowest"], errors="coerce")
+        df_clean["2nd Lowest"] = pd.to_numeric(df_clean["2nd Lowest"], errors="coerce")
+
+        # Hitung gap antara 1st dan 2nd lowest (%)
+        df_clean["Gap 1 to 2 (%)"] = ((df_clean["2nd Lowest"] - df_clean["1st Lowest"]) / df_clean["1st Lowest"] * 100).round(2)
+
+        # Hitung median price
+        df_clean["Median Price"] = vendor_values.median(axis=1)
+        df_clean["Median Price"] = pd.to_numeric(df_clean["Median Price"], errors="coerce")
+
+        # Hitung selisih tiap vendor dengan median (%)
         for v in vendor_cols:
-            df_clean[f"{v} to Median (%)"] = (
-                (df_clean[v] - df_clean["Median Price"]) / df_clean["Median Price"] * 100
-            ).round(2)
+            df_clean[f"{v} to Median (%)"] = ((df_clean[v] - df_clean["Median Price"]) / df_clean["Median Price"] * 100).round(2)
 
         # Hapus kolom ROUND
         df_clean = df_clean.drop(columns=[round_col])
@@ -788,7 +795,22 @@ def page():
         .apply(lambda row: highlight_1st_2nd_vendor(row, df_filtered_summary.columns), axis=1)
     )
 
-    st.caption(f"✨ Total number of data entries: **{len(df_filtered_summary)}**")
+    st.markdown(
+        f"""
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+            <div style="font-size:0.88rem; color:gray;">
+                ✨ Total number of data entries: <b>{len(df_filtered_summary)}</b>
+            </div>
+            <div style="text-align:right;">
+                <span style="background:#C6EFCE; padding:2px 8px; border-radius:6px; font-weight:600; font-size: 0.75rem; color: black">1st Lowest</span>
+                &nbsp;
+                <span style="background:#FFEB9C; padding:2px 8px; border-radius:6px; font-weight:600; font-size: 0.75rem; color: black">2nd Lowest</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
     st.dataframe(df_summary_style, hide_index=True)
 
     # Download button to Excel
@@ -1252,27 +1274,28 @@ def page():
             )
     )
 
-    labels = (
-        alt.Chart(trend_summary)
-            .mark_text(
-                dy=-7,                # geser sedikit ke atas
-                fontSize=10,
-                fontWeight="bold",
-                color="gray"
-            )
-            .encode(
-                x=alt.X(
-                    "PRICE TREND:N",
-                    sort=trend_order
-                ),
-                y=alt.Y("Count:Q"),
-                text="Count:Q",
-                xOffset=f"{vendor_col}:N"   # penting: supaya posisinya sama dengan bar!
-            )
-    )
+    # labels = (
+    #     alt.Chart(trend_summary)
+    #         .mark_text(
+    #             dy=-7,                # geser sedikit ke atas
+    #             fontSize=10,
+    #             fontWeight="bold",
+    #             color="gray"
+    #         )
+    #         .encode(
+    #             x=alt.X(
+    #                 "PRICE TREND:N",
+    #                 sort=trend_order
+    #             ),
+    #             y=alt.Y("Count:Q"),
+    #             text="Count:Q",
+    #             xOffset=f"{vendor_col}:N"   # penting: supaya posisinya sama dengan bar!
+    #         )
+    # )
 
     trend_chart = (
-        (bars + labels)
+        # (bars + labels)
+        bars
             .properties(
                 height=400,
                 padding={"right": 15},
