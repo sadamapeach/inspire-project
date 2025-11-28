@@ -762,31 +762,21 @@ def page():
         .apply(lambda row: highlight_1st_2nd_vendor(row, df_analysis_final.columns), axis=1)
     )
 
-    col1, col2 = st.columns([7.1,2])
-    with col1:
-        st.caption(f"✨ Total number of data entries: **{len(df_filtered_analysis)}**")
-    with col2:
-        st.markdown("""
-            <style>
-            .badge {
-                display: inline-block;
-                padding: 2px 8px;
-                border-radius: 6px;
-                font-size: 0.75rem;
-                font-weight: 500;
-                color: black;
-            }
-            .badge-green {
-                background-color: #C6EFCE; /* lebih bold dari hijau default */
-            }
-            .badge-yellow {
-                background-color: #FFEB9C; /* lebih bold dari kuning default */
-            }
-            </style>
-
-            <span class="badge badge-green">1st Lowest</span>
-            <span class="badge badge-yellow">2nd Lowest</span>
-            """, unsafe_allow_html=True)
+    st.markdown(
+        f"""
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <div style="font-size:0.9rem; color:gray;">
+                ✨ Total number of data entries: <b>{len(df_filtered_analysis)}</b>
+            </div>
+            <div style="text-align:right;">
+                <span style="background:#C6EFCE; padding:2px 8px; border-radius:6px; font-weight:600; font-size: 0.75rem; color: black">1st Lowest</span>
+                &nbsp;
+                <span style="background:#FFEB9C; padding:2px 8px; border-radius:6px; font-weight:600; font-size: 0.75rem; color: black">2nd Lowest</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
         
     st.dataframe(df_analysis_styled, hide_index=True)
 

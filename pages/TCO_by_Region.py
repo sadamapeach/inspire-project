@@ -581,8 +581,23 @@ def page():
         .apply(lambda row: highlight_1st_2nd_vendor(row, df_filtered_analysis.columns), axis=1)
     )
 
+    tab1.markdown(
+        f"""
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <div style="font-size:0.9rem; color:gray;">
+                ✨ Total number of data entries: <b>{len(df_filtered_analysis)}</b>
+            </div>
+            <div style="text-align:right;">
+                <span style="background:#C6EFCE; padding:2px 8px; border-radius:6px; font-weight:600; font-size: 0.75rem; color: black">1st Lowest</span>
+                &nbsp;
+                <span style="background:#FFEB9C; padding:2px 8px; border-radius:6px; font-weight:600; font-size: 0.75rem; color: black">2nd Lowest</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
     # --- Tampilkan di Streamlit ---
-    tab1.caption(f"✨ Total number of data entries: **{len(df_filtered_analysis)}**")
     tab1.dataframe(df_filtered_analysis_styled, hide_index=True)
 
     excel_data = get_excel_download_highlight_1st_2nd_lowest(df_filtered_analysis)
