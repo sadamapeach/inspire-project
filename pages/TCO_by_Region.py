@@ -479,35 +479,37 @@ def page():
     )
 
     # Kolom vendor dinamis
-    vendor_cols = df_analysis.columns[len(["REGION"] + non_num_cols):]
+    vendor_cols = df_analysis.select_dtypes(include=["number"]).columns.tolist()
 
-    # 1st & 2nd Lowest
-    df_analysis["1st Lowest"] = df_analysis[vendor_cols].min(axis=1)
-    df_analysis["1st Vendor"] = df_analysis[vendor_cols].idxmin(axis=1)
+    # Penanganan untuk 0 value
+    vendor_values = df_analysis[vendor_cols].copy()
+    vendor_values = vendor_values.replace(0, pd.NA)
 
-    df_analysis["2nd Lowest"] = df_analysis[vendor_cols].apply(
-        lambda row: row.nsmallest(2).iloc[-1] if len(row.dropna()) >= 2 else np.nan,
-        axis=1
-    )
+    # Hitung 1st dan 2nd lowest
+    df_analysis["1st Lowest"] = vendor_values.min(axis=1)
+    df_analysis["1st Vendor"] = vendor_values.idxmin(axis=1)
 
-    df_analysis["2nd Vendor"] = df_analysis[vendor_cols].apply(
-        lambda row: row.nsmallest(2).index[-1] if len(row.dropna()) >= 2 else "",
-        axis=1
-    )
+    # Hitung 2nd Lowest
+    # Hilangkan dulu nilai 1st Lowest dari kandidat (agar kita dapat 2nd Lowest yang benar)
+    temp = vendor_values.mask(vendor_values.eq(df_analysis["1st Lowest"], axis=0))
 
-    # Gap (%)
-    df_analysis["Gap 1 to 2 (%)"] = (
-        (df_analysis["2nd Lowest"] - df_analysis["1st Lowest"]) / df_analysis["1st Lowest"] * 100
-    ).round(2)
+    df_analysis["2nd Lowest"] = temp.min(axis=1)
+    df_analysis["2nd Vendor"] = temp.idxmin(axis=1)
 
-    # Median Price
-    df_analysis["Median Price"] = df_analysis[vendor_cols].median(axis=1)
+    # --- FIX: Pastikan numeric ---
+    df_analysis["1st Lowest"] = pd.to_numeric(df_analysis["1st Lowest"], errors="coerce")
+    df_analysis["2nd Lowest"] = pd.to_numeric(df_analysis["2nd Lowest"], errors="coerce")
 
-    # Vendor -> Median (%)
+    # Hitung gap antara 1st dan 2nd lowest (%)
+    df_analysis["Gap 1 to 2 (%)"] = ((df_analysis["2nd Lowest"] - df_analysis["1st Lowest"]) / df_analysis["1st Lowest"] * 100).round(2)
+
+    # Hitung median price
+    df_analysis["Median Price"] = vendor_values.median(axis=1)
+    df_analysis["Median Price"] = pd.to_numeric(df_analysis["Median Price"], errors="coerce")
+
+    # Hitung selisih tiap vendor dengan median (%)
     for v in vendor_cols:
-        df_analysis[f"{v} to Median (%)"] = (
-            (df_analysis[v] - df_analysis["Median Price"]) / df_analysis["Median Price"] * 100
-        ).round(2)
+        df_analysis[f"{v} to Median (%)"] = ((df_analysis[v] - df_analysis["Median Price"]) / df_analysis["Median Price"] * 100).round(2)
 
     # Simpan ke session state
     st.session_state["bid_and_price_analysis_tco_by_region"] = df_analysis
@@ -630,8 +632,7 @@ def page():
 
             # --- Hitung total partisipasi vendor ---
             vendor_counts = (
-                df_analysis[vendor_cols]
-                .notna()       # True kalau vendor berpartisipasi (ada harga)
+                (df_analysis[vendor_cols].fillna(0) > 0)   # hanya True jika nilai > 0
                 .sum()         # Hitung True per kolom
                 .reset_index()
             )

@@ -422,11 +422,7 @@ def page():
     df_analysis = df_analysis[df_analysis.iloc[:, 0] != "TOTAL"].reset_index(drop=True)
 
     # Deteksi kolom vendor (numerik)
-    vendor_cols = [c for c in df_analysis.columns if c in result.keys()]
-
-    # Pastikan kolom vendor bertipe numerik
-    for v in vendor_cols:
-        df_analysis[v] = pd.to_numeric(df_analysis[v], errors="coerce")
+    vendor_cols = df_analysis.select_dtypes(include=["number"]).columns.tolist()
 
     # Penanganan untuk 0 value
     vendor_values = df_analysis[vendor_cols].copy()
