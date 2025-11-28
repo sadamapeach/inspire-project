@@ -652,9 +652,11 @@ def page():
     vendor_cols = df_analysis.select_dtypes(include=["number"]).columns.tolist()
 
     # Hapus baris TOTAL untuk analisis per komponen
-    first_non_numeric = non_numeric_cols[0]
     df_no_total = df_analysis[
-        df_analysis[first_non_numeric].astype(str).str.upper() != "TOTAL"
+        ~df_analysis.apply(
+            lambda row: row.astype(str).str.upper().eq("TOTAL").any(),
+            axis=1
+        )
     ].copy()
 
     # Penanganan untuk 0 value
@@ -675,17 +677,6 @@ def page():
     # --- FIX: Pastikan numeric ---
     df_no_total["1st Lowest"] = pd.to_numeric(df_no_total["1st Lowest"], errors="coerce")
     df_no_total["2nd Lowest"] = pd.to_numeric(df_no_total["2nd Lowest"], errors="coerce")
-
-    # # Kedua terendah (2nd lowest)
-    # def second_lowest(row):
-    #     sorted_vals = sorted([(v, k) for k, v in row[vendor_cols].items() if pd.notnull(v)])
-    #     if len(sorted_vals) > 1:
-    #         return sorted_vals[1]
-    #     return (np.nan, np.nan)
-
-    # df_no_total[["2nd Lowest", "2nd Vendor"]] = df_no_total.apply(
-    #     lambda row: pd.Series(second_lowest(row)), axis=1
-    # )
 
     # Hitung Gap 1 to 2 (%)
     df_no_total["Gap 1 to 2 (%)"] = (

@@ -761,33 +761,52 @@ def page():
         fill_value=0
     ).reset_index()
 
-    vendor_cols = [c for c in df_pivot.columns if c not in [year_col, "REGION", scope_col] + extra_non_num]
+    # Identifikasi kolom
+    vendor_cols = df_pivot.select_dtypes(include=["number"]).columns.tolist()
 
-    # Hitung lowest & second lowest
-    df_pivot["1st Lowest"] = df_pivot[vendor_cols].min(axis=1)
-    df_pivot["1st Vendor"] = df_pivot[vendor_cols].idxmin(axis=1)
+    # Hapus baris TOTAL untuk analisis per komponen
+    df_no_total = df_pivot[
+        ~df_pivot.apply(
+            lambda row: row.astype(str).str.upper().eq("TOTAL").any(),
+            axis=1
+        )
+    ].copy()
 
-    # Dapatkan nilai second lowest dengan replace nilai lowest sementara ke NaN
-    def second_lowest(series):
-        sorted_vals = series.sort_values().unique()
-        return sorted_vals[1] if len(sorted_vals) > 1 else sorted_vals[0]
+    # Penanganan untuk 0 value
+    vendor_values = df_no_total[vendor_cols].copy()
+    vendor_values = vendor_values.replace(0, pd.NA)
 
-    def second_vendor(row):
-        sorted_vendors = row[vendor_cols].sort_values()
-        return sorted_vendors.index[1] if len(sorted_vendors) > 1 else sorted_vendors.index[0]
+    # Hitung nilai analisis per baris
+    df_no_total["1st Lowest"] = vendor_values.min(axis=1)
+    df_no_total["1st Vendor"] = vendor_values.idxmin(axis=1)
 
-    df_pivot["2nd Lowest"] = df_pivot[vendor_cols].apply(second_lowest, axis=1)
-    df_pivot["2nd Vendor"] = df_pivot[vendor_cols].apply(second_vendor, axis=1)
+    # Hitung 2nd Lowest
+    # Hilangkan dulu nilai 1st Lowest dari kandidat (agar kita dapat 2nd Lowest yang benar)
+    temp = vendor_values.mask(vendor_values.eq(df_no_total["1st Lowest"], axis=0))
 
-    # Hitung GAP antar lowest
-    df_pivot["Gap 1 to 2 (%)"] = ((df_pivot["2nd Lowest"] - df_pivot["1st Lowest"]) / df_pivot["1st Lowest"] * 100).round(2)
+    df_no_total["2nd Lowest"] = temp.min(axis=1)
+    df_no_total["2nd Vendor"] = temp.idxmin(axis=1)
+
+    # --- FIX: Pastikan numeric ---
+    df_no_total["1st Lowest"] = pd.to_numeric(df_no_total["1st Lowest"], errors="coerce")
+    df_no_total["2nd Lowest"] = pd.to_numeric(df_no_total["2nd Lowest"], errors="coerce")
+
+    # Hitung Gap 1 to 2 (%)
+    df_no_total["Gap 1 to 2 (%)"] = (
+        (df_no_total["2nd Lowest"] - df_no_total["1st Lowest"])
+        / df_no_total["1st Lowest"] * 100
+    ).round(2)
 
     # Hitung median price
-    df_pivot["Median Price"] = df_pivot[vendor_cols].median(axis=1)
+    df_no_total["Median Price"] = vendor_values.median(axis=1)
+    df_no_total["Median Price"] = pd.to_numeric(df_no_total["Median Price"], errors="coerce")
 
-    # Hitung selisih tiap vendor dengan median (%)
+    # Hitung deviasi tiap vendor terhadap median
     for v in vendor_cols:
-        df_pivot[f"{v} to Median (%)"] = ((df_pivot[v] - df_pivot["Median Price"]) / df_pivot["Median Price"] * 100).round(2)
+        df_no_total[f"{v} to Median (%)"] = (
+            (df_no_total[v] - df_no_total["Median Price"])
+            / df_no_total["Median Price"] * 100
+        ).round(2)
 
     # --- Urutkan kolom agar rapi ---
     summary_cols = (
@@ -800,15 +819,7 @@ def page():
         [f"{v} to Median (%)" for v in vendor_cols]
     )
 
-    df_summary = df_pivot[summary_cols].copy()
-
-    # Hilangkan baris TOTAL
-    df_summary = df_summary[
-        ~df_summary.apply(
-            lambda row: row.astype(str).str.upper().eq("TOTAL").any(),
-            axis=1
-        )
-    ]
+    df_summary = df_no_total[summary_cols]
 
     # --- 🎯 Tambahkan slicer
     all_year = sorted(df_summary["YEAR"].dropna().unique())
@@ -878,8 +889,23 @@ def page():
         .apply(lambda row: highlight_1st_2nd_vendor(row, df_filtered_analysis.columns), axis=1)
     )
 
+    st.markdown(
+        f"""
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <div style="font-size:0.9rem; color:gray;">
+                ✨ Total number of data entries: <b>{len(df_filtered_analysis)}</b>
+            </div>
+            <div style="text-align:right;">
+                <span style="background:#C6EFCE; padding:2px 8px; border-radius:6px; font-weight:600; font-size: 0.75rem; color: black">1st Lowest</span>
+                &nbsp;
+                <span style="background:#FFEB9C; padding:2px 8px; border-radius:6px; font-weight:600; font-size: 0.75rem; color: black">2nd Lowest</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
     # --- Tampilkan hasil ---
-    st.caption(f"✨ Total number of data entries: **{len(df_filtered_analysis)}**")
     st.dataframe(df_summary_styled, hide_index=True)
 
     # Simpan hasil ke variabel
@@ -910,8 +936,7 @@ def page():
 
     # --- Hitung total partisipasi vendor ---
     vendor_counts = (
-        df_summary[vendor_cols]
-        .notna()       # True kalau vendor berpartisipasi (ada harga)
+        (df_summary[vendor_cols].fillna(0) > 0)   # hanya True jika nilai > 0
         .sum()         # Hitung True per kolom
         .reset_index()
     )
@@ -1051,7 +1076,7 @@ def page():
     win_rate = win_rate[cols_rest[:1] + cols_front + cols_rest[1:]]
 
     # --- Ganti nama kolom biar lebih konsisten & enak dibaca
-    df_summary = win_rate.rename(columns={
+    df_summary_chart = win_rate.rename(columns={
         "Wins1": "1st Rank",
         "Wins2": "2nd Rank"
     })
@@ -1072,10 +1097,10 @@ def page():
                 - Large Gap Between 1st & 2nd Win Rate  
                     Shows clear market dominance by certain vendors.
             ''')
-            st.dataframe(df_summary, hide_index=True)
+            st.dataframe(df_summary_chart, hide_index=True)
 
             # Simpan hasil ke variabel
-            excel_data = get_excel_download(df_summary, sheet_name="Win Rate Trend Summary")
+            excel_data = get_excel_download(df_summary_chart, sheet_name="Win Rate Trend Summary")
 
             # Layout tombol (rata kanan)
             col1, col2, col3 = st.columns([3,1,1])
@@ -1091,7 +1116,7 @@ def page():
 
     # --- AVERAGE GAP VISUALIZATION ---
     # --- Hitung rata-rata Gap 1 to 2 (%) per Vendor (hanya untuk 1st Vendor)
-    df_gap = df_pivot.copy()
+    df_gap = df_summary.copy()
 
     # Ubah kolom 'Gap 1 to 2 (%)' ke numerik (hapus simbol %)
     df_gap["Gap 1 to 2 (%)"] = (

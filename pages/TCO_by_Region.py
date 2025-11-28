@@ -452,8 +452,12 @@ def page():
     num_cols = df_raw_analysis.select_dtypes(include=["number"]).columns.tolist()
 
     # Hapus row TOTAL
-    first_non_num = non_num_cols[0]
-    df_raw_analysis = df_raw_analysis[df_raw_analysis[first_non_num].astype(str).str.upper() != "TOTAL"].copy()
+    df_raw_analysis = df_raw_analysis[
+        ~df_raw_analysis.apply(
+            lambda row: row.astype(str).str.upper().eq("TOTAL").any(),
+            axis=1
+        )
+    ].copy()
 
     # Unpivot
     df_long = df_raw_analysis.melt(
@@ -1295,8 +1299,12 @@ def page():
     num_cols = df_raw_analysis_transpose.select_dtypes(include=["number"]).columns.tolist()
 
     # Hapus row TOTAL
-    first_non_num = non_num_cols[0]
-    df_raw_analysis_transpose = df_raw_analysis_transpose[df_raw_analysis_transpose[first_non_num].astype(str).str.upper() != "TOTAL"].copy()
+    df_raw_analysis_transpose = df_raw_analysis_transpose[
+        ~df_raw_analysis_transpose.apply(
+            lambda row: row.astype(str).str.upper().eq("TOTAL").any(),
+            axis=1
+        )
+    ].copy()
 
     # Unpivot
     df_long = df_raw_analysis_transpose.melt(
@@ -1322,35 +1330,37 @@ def page():
     )
 
     # Kolom vendor dinamis
-    vendor_cols = df_analysis_transposed.columns[len(["SCOPE"] + non_num_cols):]
+    vendor_cols = df_analysis_transposed.select_dtypes(include=["number"]).columns.tolist()
 
-    # 1st & 2nd Lowest
-    df_analysis_transposed["1st Lowest"] = df_analysis_transposed[vendor_cols].min(axis=1)
-    df_analysis_transposed["1st Vendor"] = df_analysis_transposed[vendor_cols].idxmin(axis=1)
+    # Penanganan untuk 0 value
+    vendor_values = df_analysis_transposed[vendor_cols].copy()
+    vendor_values = vendor_values.replace(0, pd.NA)
 
-    df_analysis_transposed["2nd Lowest"] = df_analysis_transposed[vendor_cols].apply(
-        lambda row: row.nsmallest(2).iloc[-1] if len(row.dropna()) >= 2 else np.nan,
-        axis=1
-    )
+    # Hitung 1st dan 2nd lowest
+    df_analysis_transposed["1st Lowest"] = vendor_values.min(axis=1)
+    df_analysis_transposed["1st Vendor"] = vendor_values.idxmin(axis=1)
 
-    df_analysis_transposed["2nd Vendor"] = df_analysis_transposed[vendor_cols].apply(
-        lambda row: row.nsmallest(2).index[-1] if len(row.dropna()) >= 2 else "",
-        axis=1
-    )
+    # Hitung 2nd Lowest
+    # Hilangkan dulu nilai 1st Lowest dari kandidat (agar kita dapat 2nd Lowest yang benar)
+    temp = vendor_values.mask(vendor_values.eq(df_analysis_transposed["1st Lowest"], axis=0))
 
-    # Gap (%)
-    df_analysis_transposed["Gap 1 to 2 (%)"] = (
-        (df_analysis_transposed["2nd Lowest"] - df_analysis_transposed["1st Lowest"]) / df_analysis_transposed["1st Lowest"] * 100
-    ).round(2)
+    df_analysis_transposed["2nd Lowest"] = temp.min(axis=1)
+    df_analysis_transposed["2nd Vendor"] = temp.idxmin(axis=1)
 
-    # Median Price
-    df_analysis_transposed["Median Price"] = df_analysis_transposed[vendor_cols].median(axis=1)
+    # --- FIX: Pastikan numeric ---
+    df_analysis_transposed["1st Lowest"] = pd.to_numeric(df_analysis_transposed["1st Lowest"], errors="coerce")
+    df_analysis_transposed["2nd Lowest"] = pd.to_numeric(df_analysis_transposed["2nd Lowest"], errors="coerce")
 
-    # Vendor -> Median (%)
+    # Hitung gap antara 1st dan 2nd lowest (%)
+    df_analysis_transposed["Gap 1 to 2 (%)"] = ((df_analysis_transposed["2nd Lowest"] - df_analysis_transposed["1st Lowest"]) / df_analysis_transposed["1st Lowest"] * 100).round(2)
+
+    # Hitung median price
+    df_analysis_transposed["Median Price"] = vendor_values.median(axis=1)
+    df_analysis_transposed["Median Price"] = pd.to_numeric(df_analysis_transposed["Median Price"], errors="coerce")
+
+    # Hitung selisih tiap vendor dengan median (%)
     for v in vendor_cols:
-        df_analysis_transposed[f"{v} to Median (%)"] = (
-            (df_analysis_transposed[v] - df_analysis_transposed["Median Price"]) / df_analysis_transposed["Median Price"] * 100
-        ).round(2)
+        df_analysis_transposed[f"{v} to Median (%)"] = ((df_analysis_transposed[v] - df_analysis_transposed["Median Price"]) / df_analysis_transposed["Median Price"] * 100).round(2)
 
     # Simpan ke session state
     st.session_state["bid_and_price_analysis_transposed_tco_by_region"] = df_analysis_transposed
@@ -1425,7 +1435,22 @@ def page():
         .apply(lambda row: highlight_1st_2nd_vendor(row, df_filtered_transposed.columns), axis=1)
     )
 
-    tab2.caption(f"✨ Total number of data entries: **{len(df_filtered_transposed)}**")
+    tab2.markdown(
+        f"""
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <div style="font-size:0.9rem; color:gray;">
+                ✨ Total number of data entries: <b>{len(df_filtered_transposed)}</b>
+            </div>
+            <div style="text-align:right;">
+                <span style="background:#C6EFCE; padding:2px 8px; border-radius:6px; font-weight:600; font-size: 0.75rem; color: black">1st Lowest</span>
+                &nbsp;
+                <span style="background:#FFEB9C; padding:2px 8px; border-radius:6px; font-weight:600; font-size: 0.75rem; color: black">2nd Lowest</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
     tab2.dataframe(df_filtered_transposed_styled, hide_index=True)
 
     excel_data = get_excel_download_highlight_1st_2nd_lowest(df_filtered_transposed)
@@ -1457,8 +1482,7 @@ def page():
 
             # --- Hitung total partisipasi vendor ---
             vendor_counts = (
-                df_analysis_transposed[vendor_cols]
-                .notna()       # True kalau vendor berpartisipasi (ada harga)
+                (df_analysis[vendor_cols].fillna(0) > 0)   # hanya True jika nilai > 0
                 .sum()         # Hitung True per kolom
                 .reset_index()
             )
