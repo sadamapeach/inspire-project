@@ -1,5 +1,11 @@
 import streamlit as st
-import pandas as pd
+import pages.TCO_by_Year as TCO_by_Year
+import pages.TCO_by_Region as TCO_by_Region
+import pages.TCO_by_Year_Region as TCO_by_Year_Region
+import pages.TCO_by_Round as TCO_by_Round
+import pages.UPL_Comparison as UPL_Comparison
+import pages.UPL_Comparison_Round as UPL_Comparison_Round
+import pages.Standard_Deviation as Standard_Deviation
 
 def page():
     st.header("🏡 Intro: Bid & Price Analytics Tool")
@@ -33,16 +39,16 @@ def page():
     # Main Features
     # st.markdown("#### Main Features")
     st.subheader("Main Features")
-    st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+    # st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
     # 1️⃣ TCO Comparison by Year
     col1, col2 = st.columns([1, 9])  # kiri lebih sempit
 
-    # background-color: #EC008C;
     with col1:
         st.markdown(
             """
-            <div style="
+            <style>
+            .hover-div {
                 background-color: #BC13FE;
                 border-radius: 8px;
                 padding: 20px;
@@ -52,9 +58,20 @@ def page():
                 align-items: center;
                 justify-content: center;
                 box-shadow: 0 2px 5px rgba(0,0,0,0.15);
-            ">
-                <img src="https://cdn-icons-png.flaticon.com/512/14991/14991730.png" width="35" />
-            </div>
+                transition: background-color 0.3s, transform 0.3s;
+            }
+
+            .hover-div:hover {
+                background-color: #E299FF;
+                transform: scale(1.05);
+            }
+            </style>
+
+            <a href="https://inspire-project-analytics-tool.streamlit.app/1_TCO_Comparison_by_Year">
+                <div class="hover-div">
+                    <img src="https://cdn-icons-png.flaticon.com/512/14991/14991730.png" width="35" />
+                </div>
+            </a>
             """,
             unsafe_allow_html=True
         )
@@ -62,15 +79,27 @@ def page():
     with col2:
         st.markdown(
             """
+            <style>
+            a.hover-link {
+                color: #BC13FE;
+                font-weight: 800;
+                text-decoration: none;
+            }
+            a.hover-link:hover {
+                color: #E299FF;
+            }
+            </style>
+
             <div style="
                 display: flex;
                 align-items: center;
                 height: 65px;
             ">
                 <div style="text-align: justify; font-size: 15px;">
-                    <span style="color: #BC13FE; font-weight: 800;">TCO Comparison by Year</span>
-                    compares TCO accross vendors by analyzing year-over-year price changes to
-                    identify long-term cost trends.
+                    <a href="https://inspire-project-analytics-tool.streamlit.app/1_TCO_Comparison_by_Year"
+                    class="hover-link">TCO Comparison by Year</a>
+                    compares TCO across vendors by analyzing year-over-year price changes to identify long-
+                    term cost trends.
                 </div>
             </div>
             """,
@@ -86,8 +115,9 @@ def page():
     with col1:
         st.markdown(
             """
-            <div style="
-                background-color: #FF2EC4; 
+            <style>
+            .hover-div2 {
+                background-color: #FF2EC4;
                 border-radius: 8px;
                 padding: 20px;
                 width: 65px;
@@ -96,9 +126,20 @@ def page():
                 align-items: center;
                 justify-content: center;
                 box-shadow: 0 2px 5px rgba(0,0,0,0.15);
-            ">
-                <img src="https://cdn-icons-png.flaticon.com/512/15366/15366033.png" width="35" />
-            </div>
+                transition: background-color 0.3s, transform 0.3s;
+            }
+
+            .hover-div2:hover {
+                background-color: #FF99E0;
+                transform: scale(1.05);
+            }
+            </style>
+
+            <a href="https://inspire-project-analytics-tool.streamlit.app/1_TCO_Comparison_by_Year">
+                <div class="hover-div2">
+                    <img src="https://cdn-icons-png.flaticon.com/512/15366/15366033.png" width="35" />
+                </div>
+            </a>
             """,
             unsafe_allow_html=True
         )
@@ -106,15 +147,27 @@ def page():
     with col2:
         st.markdown(
             """
+            <style>
+            a.hover-link2 {
+                color: #FF2EC4;
+                font-weight: 800;
+                text-decoration: none;
+            }
+            a.hover-link2:hover {
+                color: #FF99E0;
+            }
+            </style>
+
             <div style="
                 display: flex;
                 align-items: center;
                 height: 65px;
             ">
                 <div style="text-align: justify; font-size: 15px;">
-                    <span style="color: #FF2EC4; font-weight: 800;">TCO Comparison by Region</span>
-                    analyzes TCO differences across regions to highlight cost variations based on
-                    geographic requirements.
+                    <a href="https://inspire-project-analytics-tool.streamlit.app/1_TCO_Comparison_by_Year"
+                    class="hover-link2">TCO Comparison by Region</a>
+                    analyzes TCO differences across regions to highlight cost variations based on geographic 
+                    requirements.
                 </div>
             </div>
             """,
@@ -130,8 +183,9 @@ def page():
     with col1:
         st.markdown(
             """
-            <div style="
-                background-color: #FF1BF1; 
+            <style>
+            .hover-div3 {
+                background-color: #FF1BF1;
                 border-radius: 8px;
                 padding: 20px;
                 width: 65px;
@@ -140,9 +194,20 @@ def page():
                 align-items: center;
                 justify-content: center;
                 box-shadow: 0 2px 5px rgba(0,0,0,0.15);
-            ">
-                <img src="https://cdn-icons-png.flaticon.com/512/4624/4624053.png" width="35" />
-            </div>
+                transition: background-color 0.3s, transform 0.3s;
+            }
+
+            .hover-div3:hover {
+                background-color: #FF7AF7;
+                transform: scale(1.05);
+            }
+            </style>
+
+            <a href="https://inspire-project-analytics-tool.streamlit.app/1_TCO_Comparison_by_Year">
+                <div class="hover-div3">
+                    <img src="https://cdn-icons-png.flaticon.com/512/4624/4624053.png" width="35" />
+                </div>
+            </a>
             """,
             unsafe_allow_html=True
         )
@@ -150,13 +215,25 @@ def page():
     with col2:
         st.markdown(
             """
+            <style>
+            a.hover-link3 {
+                color: #FF1BF1;
+                font-weight: 800;
+                text-decoration: none;
+            }
+            a.hover-link3:hover {
+                color: #FF7AF7;
+            }
+            </style>
+
             <div style="
                 display: flex;
                 align-items: center;
                 height: 65px;
             ">
                 <div style="text-align: justify; font-size: 15px;">
-                    <span style="color: #FF1BF1; font-weight: 800;">TCO Comparison by Year + Region</span>
+                    <a href="https://inspire-project-analytics-tool.streamlit.app/1_TCO_Comparison_by_Year"
+                    class="hover-link3">TCO Comparison by Year + Region</a>
                     combines yearly and regional TCO analysis to provide a more comprehensive view of 
                     vendor pricing across time and location.
                 </div>
@@ -174,8 +251,9 @@ def page():
     with col1:
         st.markdown(
             """
-            <div style="
-                background-color: #26BDAD; 
+            <style>
+            .hover-div4 {
+                background-color: #26BDAD;
                 border-radius: 8px;
                 padding: 20px;
                 width: 65px;
@@ -184,9 +262,20 @@ def page():
                 align-items: center;
                 justify-content: center;
                 box-shadow: 0 2px 5px rgba(0,0,0,0.15);
-            ">
-                <img src="https://cdn-icons-png.flaticon.com/512/4624/4624081.png" width="35" />
-            </div>
+                transition: background-color 0.3s, transform 0.3s;
+            }
+
+            .hover-div4:hover {
+                background-color: #7FE2DC;
+                transform: scale(1.05);
+            }
+            </style>
+
+            <a href="https://inspire-project-analytics-tool.streamlit.app/1_TCO_Comparison_by_Year">
+                <div class="hover-div4">
+                    <img src="https://cdn-icons-png.flaticon.com/512/4624/4624081.png" width="35" />
+                </div>
+            </a>
             """,
             unsafe_allow_html=True
         )
@@ -194,13 +283,25 @@ def page():
     with col2:
         st.markdown(
             """
+            <style>
+            a.hover-link4 {
+                color: #26BDAD;
+                font-weight: 800;
+                text-decoration: none;
+            }
+            a.hover-link4:hover {
+                color: #7FE2DC;
+            }
+            </style>
+
             <div style="
                 display: flex;
                 align-items: center;
                 height: 65px;
             ">
                 <div style="text-align: justify; font-size: 15px;">
-                    <span style="color: #26BDAD; font-weight: 800;">TCO Comparison Round by Round</span>
+                    <a href="https://inspire-project-analytics-tool.streamlit.app/1_TCO_Comparison_by_Year"
+                    class="hover-link4">TCO Comparison Round by Round</a>
                     evaluates TCO changes across negotiation rounds to track vendor pricing progress and
                     identify the most competitive movements.
                 </div>
@@ -218,8 +319,9 @@ def page():
     with col1:
         st.markdown(
             """
-            <div style="
-                background-color: #C7FF00; 
+            <style>
+            .hover-div5 {
+                background-color: #C7FF00;
                 border-radius: 8px;
                 padding: 20px;
                 width: 65px;
@@ -228,9 +330,20 @@ def page():
                 align-items: center;
                 justify-content: center;
                 box-shadow: 0 2px 5px rgba(0,0,0,0.15);
-            ">
-                <img src="https://cdn-icons-png.flaticon.com/512/4624/4624116.png" width="35" />
-            </div>
+                transition: background-color 0.3s, transform 0.3s;
+            }
+
+            .hover-div5:hover {
+                background-color: #E5FF66;
+                transform: scale(1.05);
+            }
+            </style>
+
+            <a href="https://inspire-project-analytics-tool.streamlit.app/1_TCO_Comparison_by_Year">
+                <div class="hover-div5">
+                    <img src="https://cdn-icons-png.flaticon.com/512/4624/4624116.png" width="35" />
+                </div>
+            </a>
             """,
             unsafe_allow_html=True
         )
@@ -238,13 +351,25 @@ def page():
     with col2:
         st.markdown(
             """
+            <style>
+            a.hover-link5 {
+                color: #C7FF00;
+                font-weight: 800;
+                text-decoration: none;
+            }
+            a.hover-link5:hover {
+                color: #E5FF66;
+            }
+            </style>
+
             <div style="
                 display: flex;
                 align-items: center;
                 height: 65px;
             ">
                 <div style="text-align: justify; font-size: 15px;">
-                    <span style="color: #C7FF00; font-weight: 800;">UPL Comparison</span>
+                    <a href="https://inspire-project-analytics-tool.streamlit.app/1_TCO_Comparison_by_Year"
+                    class="hover-link5">UPL Comparison</a>
                     compares UPL values across vendors to determine the most competitive 
                     item-level pricing.
                 </div>
@@ -258,11 +383,11 @@ def page():
     # 6️⃣ UPL Comparison Round by Round
     col1, col2 = st.columns([1, 9])  # kiri lebih sempit
 
-    # background-color: #FF77A9;
     with col1:
         st.markdown(
             """
-            <div style="
+            <style>
+            .hover-div6 {
                 background-color: #FFCB09;
                 border-radius: 8px;
                 padding: 20px;
@@ -272,9 +397,20 @@ def page():
                 align-items: center;
                 justify-content: center;
                 box-shadow: 0 2px 5px rgba(0,0,0,0.15);
-            ">
-                <img src="https://cdn-icons-png.flaticon.com/512/4624/4624030.png" width="35" />
-            </div>
+                transition: background-color 0.3s, transform 0.3s;
+            }
+
+            .hover-div6:hover {
+                background-color: #FFE066;
+                transform: scale(1.05);
+            }
+            </style>
+
+            <a href="https://inspire-project-analytics-tool.streamlit.app/1_TCO_Comparison_by_Year">
+                <div class="hover-div6">
+                    <img src="https://cdn-icons-png.flaticon.com/512/4624/4624030.png" width="35" />
+                </div>
+            </a>
             """,
             unsafe_allow_html=True
         )
@@ -282,13 +418,25 @@ def page():
     with col2:
         st.markdown(
             """
+            <style>
+            a.hover-link6 {
+                color: #FFCB09;
+                font-weight: 800;
+                text-decoration: none;
+            }
+            a.hover-link6:hover {
+                color: #FFE066;
+            }
+            </style>
+
             <div style="
                 display: flex;
                 align-items: center;
                 height: 65px;
             ">
                 <div style="text-align: justify; font-size: 15px;">
-                    <span style="color: #FFCB09; font-weight: 800;">UPL Comparison Round by Round</span>
+                    <a href="https://inspire-project-analytics-tool.streamlit.app/1_TCO_Comparison_by_Year"
+                    class="hover-link6">UPL Comparison Round by Round</a>
                     tracks UPL adjustments throughout negotiation rounds to understand pricing dynamics
                     at the item level.
                 </div>
@@ -305,8 +453,9 @@ def page():
     with col1:
         st.markdown(
             """
-            <div style="
-                background-color: #ED1C24; 
+            <style>
+            .hover-div7 {
+                background-color: #ED1C24;
                 border-radius: 8px;
                 padding: 20px;
                 width: 65px;
@@ -315,9 +464,20 @@ def page():
                 align-items: center;
                 justify-content: center;
                 box-shadow: 0 2px 5px rgba(0,0,0,0.15);
-            ">
-                <img src="https://cdn-icons-png.flaticon.com/512/4624/4624098.png" width="35" />
-            </div>
+                transition: background-color 0.3s, transform 0.3s;
+            }
+
+            .hover-div7:hover {
+                background-color: #F56667;
+                transform: scale(1.05);
+            }
+            </style>
+
+            <a href="https://inspire-project-analytics-tool.streamlit.app/1_TCO_Comparison_by_Year">
+                <div class="hover-div7">
+                    <img src="https://cdn-icons-png.flaticon.com/512/4624/4624098.png" width="35" />
+                </div>
+            </a>
             """,
             unsafe_allow_html=True
         )
@@ -325,13 +485,25 @@ def page():
     with col2:
         st.markdown(
             """
+            <style>
+            a.hover-link7 {
+                color: #ED1C24;
+                font-weight: 800;
+                text-decoration: none;
+            }
+            a.hover-link7:hover {
+                color: #F56667;
+            }
+            </style>
+
             <div style="
                 display: flex;
                 align-items: center;
                 height: 65px;
             ">
                 <div style="text-align: justify; font-size: 15px;">
-                    <span style="color: #ED1C24; font-weight: 800;">Standard Deviation</span>
+                    <a href="https://inspire-project-analytics-tool.streamlit.app/1_TCO_Comparison_by_Year"
+                    class="hover-link7">Standard Deviation</a>
                     measures the price variation across vendors to assess pricing stability 
                     and the consistency of commercial offers.
                 </div>
