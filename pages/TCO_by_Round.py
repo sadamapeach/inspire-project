@@ -671,21 +671,30 @@ def page():
     # Penanganan untuk 0 value
     vendor_values = df_analysis[vendor_cols].copy()
     vendor_values = vendor_values.replace(0, pd.NA)
+    vendor_values = vendor_values.apply(pd.to_numeric, errors="coerce")
 
     # Hitung 1st dan 2nd lowest
     df_analysis["1st Lowest"] = vendor_values.min(axis=1)
-    df_analysis["1st Vendor"] = vendor_values.idxmin(axis=1)
+    # df_analysis["1st Vendor"] = vendor_values.idxmin(axis=1)
+
+    # Penanganan khusus 1st Vendor
+    mask_all_nan1 = vendor_values.isna().all(axis=1)
+    df_analysis["1st Vendor"] = None
+    valid_idx1 = (~mask_all_nan1)
+    df_analysis.loc[valid_idx1, "1st Vendor"] = vendor_values.loc[valid_idx1].idxmin(axis=1) 
 
     # Hitung 2nd Lowest
     # Hilangkan dulu nilai 1st Lowest dari kandidat (agar kita dapat 2nd Lowest yang benar)
     temp = vendor_values.mask(vendor_values.eq(df_analysis["1st Lowest"], axis=0))
 
     df_analysis["2nd Lowest"] = temp.min(axis=1)
-    df_analysis["2nd Vendor"] = temp.idxmin(axis=1)
+    # df_analysis["2nd Vendor"] = temp.idxmin(axis=1)
 
-    # --- FIX: Pastikan numeric ---
-    df_analysis["1st Lowest"] = pd.to_numeric(df_analysis["1st Lowest"], errors="coerce")
-    df_analysis["2nd Lowest"] = pd.to_numeric(df_analysis["2nd Lowest"], errors="coerce")
+    # Penanganan khusus 2nd Vendor
+    mask_all_nan2 = temp.isna().all(axis=1)
+    df_analysis["2nd Vendor"] = None
+    valid_idx2 = (~mask_all_nan2)
+    df_analysis.loc[valid_idx2, "2nd Vendor"] = temp.loc[valid_idx2].idxmin(axis=1)
 
     # Hitung gap antara 1st dan 2nd lowest (%)
     df_analysis["Gap 1 to 2 (%)"] = ((df_analysis["2nd Lowest"] - df_analysis["1st Lowest"]) / df_analysis["1st Lowest"] * 100).round(2)
