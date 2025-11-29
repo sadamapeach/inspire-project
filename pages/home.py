@@ -16,43 +16,331 @@ def page():
         unsafe_allow_html=True
     )
 
-    st.markdown("On progress..")
-    st.image("https://i.pinimg.com/originals/61/8f/08/618f083c61a7460ce0a6064319af41bd.gif")
+    # st.markdown("On progress..")
+    # st.image("https://i.pinimg.com/originals/61/8f/08/618f083c61a7460ce0a6064319af41bd.gif")
 
-
-    # st.markdown("""
-    # :orange[***Bid & Price Analytics Tool***] is a [Streamlit](https://streamlit.io)-based analytical application 
-    # designed to assist the CTPO - IOH team in performing automatic commercial evaluations of bidders.
-    # """)
+    st.markdown("""
+        <div style="text-align: justify; font-size: 15px; margin-bottom: 30px">
+            <span style="color: orange; font-weight: 600;"> Bid & Price Analytics Tool</span>
+            is a <a href="https://streamlit.io" target="_blank" 
+            style="color:#4DA3FF;">
+            Streamlit</a>-powered application that automates
+            commercial bid comparison by analyzing multi-vendor submissions, identifying the 
+            most competitive offers, and generating clear, ready-to-share analytical outputs.
+        </div>
+    """, unsafe_allow_html=True)
     
-    # # Main Features
-    # st.subheader("Main Features")
-    # # col1, col2 = st.columns([3, 1])
+    # Main Features
+    # st.markdown("#### Main Features")
+    st.subheader("Main Features")
+    st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
-    # # with col1:
-    # data = {
-    #     "Feature": [
-    #         "🏡 Home",
-    #         "1️⃣ Single Layer TCO",
-    #         "2️⃣ Double Layer TCO"
-    #     ],
-    #     "Description": [
-    #         "Introduction and user guide for the Bid & Price Analytics Tool",
-    #         "Analyze bidder-level pricing (single-sheet file)",
-    #         "Analyze multi-year pricing (multi-sheet file)"
-    #     ]
-    # }
+    # 1️⃣ TCO Comparison by Year
+    col1, col2 = st.columns([1, 9])  # kiri lebih sempit
 
-    # df = pd.DataFrame(data)
-    # st.dataframe(df, width="stretch", hide_index=True)
+    # background-color: #EC008C;
+    with col1:
+        st.markdown(
+            """
+            <div style="
+                background-color: #BC13FE;
+                border-radius: 8px;
+                padding: 20px;
+                width: 65px;
+                height: 65px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+            ">
+                <img src="https://cdn-icons-png.flaticon.com/512/14991/14991730.png" width="35" />
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
-    # # with col2:
-    # #     st.image("assets/dap_man.png", width=148)
+    with col2:
+        st.markdown(
+            """
+            <div style="
+                display: flex;
+                align-items: center;
+                height: 65px;
+            ">
+                <div style="text-align: justify; font-size: 15px;">
+                    <span style="color: #BC13FE; font-weight: 800;">TCO Comparison by Year</span>
+                    compares TCO accross vendors by analyzing year-over-year price changes to
+                    identify long-term cost trends.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
-    # # st.divider()
+    st.divider()
 
-    # # How to Use
-    # st.subheader("How to Use")
+    # 2️⃣ TCO Comparison by Region
+    col1, col2 = st.columns([1, 9])  # kiri lebih sempit
+
+    # background-color: #C6168D;
+    with col1:
+        st.markdown(
+            """
+            <div style="
+                background-color: #FF2EC4; 
+                border-radius: 8px;
+                padding: 20px;
+                width: 65px;
+                height: 65px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+            ">
+                <img src="https://cdn-icons-png.flaticon.com/512/15366/15366033.png" width="35" />
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    with col2:
+        st.markdown(
+            """
+            <div style="
+                display: flex;
+                align-items: center;
+                height: 65px;
+            ">
+                <div style="text-align: justify; font-size: 15px;">
+                    <span style="color: #FF2EC4; font-weight: 800;">TCO Comparison by Region</span>
+                    analyzes TCO differences across regions to highlight cost variations based on
+                    geographic requirements.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    st.divider()
+
+    # 3️⃣ TCO Comparison by Year + Region
+    col1, col2 = st.columns([1, 9])  # kiri lebih sempit
+
+    # background-color: #ED1C24;
+    with col1:
+        st.markdown(
+            """
+            <div style="
+                background-color: #FF1BF1; 
+                border-radius: 8px;
+                padding: 20px;
+                width: 65px;
+                height: 65px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+            ">
+                <img src="https://cdn-icons-png.flaticon.com/512/4624/4624053.png" width="35" />
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    with col2:
+        st.markdown(
+            """
+            <div style="
+                display: flex;
+                align-items: center;
+                height: 65px;
+            ">
+                <div style="text-align: justify; font-size: 15px;">
+                    <span style="color: #FF1BF1; font-weight: 800;">TCO Comparison by Year + Region</span>
+                    combines yearly and regional TCO analysis to provide a more comprehensive view of 
+                    vendor pricing across time and location.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    st.divider()
+
+    # 4️⃣ TCO Comparison Round by Round
+    col1, col2 = st.columns([1, 9])  # kiri lebih sempit
+
+    # background-color: #26BDAD;
+    with col1:
+        st.markdown(
+            """
+            <div style="
+                background-color: #26BDAD; 
+                border-radius: 8px;
+                padding: 20px;
+                width: 65px;
+                height: 65px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+            ">
+                <img src="https://cdn-icons-png.flaticon.com/512/4624/4624081.png" width="35" />
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    with col2:
+        st.markdown(
+            """
+            <div style="
+                display: flex;
+                align-items: center;
+                height: 65px;
+            ">
+                <div style="text-align: justify; font-size: 15px;">
+                    <span style="color: #26BDAD; font-weight: 800;">TCO Comparison Round by Round</span>
+                    evaluates TCO changes across negotiation rounds to track vendor pricing progress and
+                    identify the most competitive movements.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    st.divider()
+
+    # 5️⃣ UPL Comparison
+    col1, col2 = st.columns([1, 9])  # kiri lebih sempit
+
+    # background-color: #FFCB09;
+    with col1:
+        st.markdown(
+            """
+            <div style="
+                background-color: #C7FF00; 
+                border-radius: 8px;
+                padding: 20px;
+                width: 65px;
+                height: 65px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+            ">
+                <img src="https://cdn-icons-png.flaticon.com/512/4624/4624116.png" width="35" />
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    with col2:
+        st.markdown(
+            """
+            <div style="
+                display: flex;
+                align-items: center;
+                height: 65px;
+            ">
+                <div style="text-align: justify; font-size: 15px;">
+                    <span style="color: #C7FF00; font-weight: 800;">UPL Comparison</span>
+                    compares UPL values across vendors to determine the most competitive 
+                    item-level pricing.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    st.divider()
+
+    # 6️⃣ UPL Comparison Round by Round
+    col1, col2 = st.columns([1, 9])  # kiri lebih sempit
+
+    # background-color: #FF77A9;
+    with col1:
+        st.markdown(
+            """
+            <div style="
+                background-color: #FFCB09;
+                border-radius: 8px;
+                padding: 20px;
+                width: 65px;
+                height: 65px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+            ">
+                <img src="https://cdn-icons-png.flaticon.com/512/4624/4624030.png" width="35" />
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    with col2:
+        st.markdown(
+            """
+            <div style="
+                display: flex;
+                align-items: center;
+                height: 65px;
+            ">
+                <div style="text-align: justify; font-size: 15px;">
+                    <span style="color: #FFCB09; font-weight: 800;">UPL Comparison Round by Round</span>
+                    tracks UPL adjustments throughout negotiation rounds to understand pricing dynamics
+                    at the item level.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    st.divider()
+
+    # 7️⃣ Standard Deviation
+    col1, col2 = st.columns([1, 9])  # kiri lebih sempit
+
+    with col1:
+        st.markdown(
+            """
+            <div style="
+                background-color: #ED1C24; 
+                border-radius: 8px;
+                padding: 20px;
+                width: 65px;
+                height: 65px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+            ">
+                <img src="https://cdn-icons-png.flaticon.com/512/4624/4624098.png" width="35" />
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    with col2:
+        st.markdown(
+            """
+            <div style="
+                display: flex;
+                align-items: center;
+                height: 65px;
+            ">
+                <div style="text-align: justify; font-size: 15px;">
+                    <span style="color: #ED1C24; font-weight: 800;">Standard Deviation</span>
+                    measures the price variation across vendors to assess pricing stability 
+                    and the consistency of commercial offers.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    st.divider()
 
     # # 1️⃣ Single Layer TCO
     # st.markdown("##### 1️⃣ Single Layer TCO")

@@ -1,6 +1,5 @@
 import streamlit as st
-import pages.home as home 
-# import pages.layer1 as layer1
+import pages.home as home
 import pages.TCO_by_Year as TCO_by_Year
 import pages.TCO_by_Region as TCO_by_Region
 import pages.TCO_by_Year_Region as TCO_by_Year_Region
@@ -11,7 +10,6 @@ import pages.Standard_Deviation as Standard_Deviation
 
 pg = st.navigation([
     st.Page(home.page, title="🏡 Home", url_path="home"),
-    # st.Page(layer1.page, title="1️⃣ Single Layer TCO", url_path="layer1"),
     st.Page(TCO_by_Year.page, title="1️⃣ TCO Comparison by Year", url_path="1_TCO_Comparison_by_Year"),
     st.Page(TCO_by_Region.page, title="2️⃣ TCO Comparison by Region", url_path="2_TCO_Comparison_by_Region"),
     st.Page(TCO_by_Year_Region.page, title="3️⃣ TCO Comparison by Year + Region", url_path="3_TCO_Comparison_by_Year_Region"),
