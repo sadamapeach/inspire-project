@@ -508,14 +508,14 @@ def page():
         id_vars=["ROUND", "VENDOR"] + non_num_cols,
         value_vars=price_cols,
         var_name="PRICE_COL",
-        value_name="PVAL"
+        value_name="[PRICE]"
     )
 
     # Pivot ke format wide (Vendor Round)
     df_pivot = df_long.pivot_table(
         index=non_num_cols,
         columns=["VENDOR", "ROUND"],
-        values="PVAL",
+        values="[PRICE]",
         aggfunc="first"
     )
 

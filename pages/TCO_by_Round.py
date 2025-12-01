@@ -550,11 +550,11 @@ def page():
         id_vars=["ROUND"] + scope_cols,
         value_vars=vendor_cols,
         var_name="VENDOR",
-        value_name="PVAL"
+        value_name="[PRICE]"
     )
 
     # Reorder
-    final_cols = ["ROUND", "VENDOR"] + scope_cols + ["PVAL"]
+    final_cols = ["ROUND", "VENDOR"] + scope_cols + ["[PRICE]"]
     df_summary = df_summary[final_cols]
 
     # Sort
@@ -635,14 +635,14 @@ def page():
         id_vars=["ROUND"] + scope_cols,
         value_vars=vendor_cols,
         var_name="VENDOR",
-        value_name="PVAL"
+        value_name="[PRICE]"
     )
 
     # Pivot
     df_ppivot = df_plong.pivot_table(
         index=scope_cols,
         columns=["VENDOR", "ROUND"],
-        values="PVAL",
+        values="[PRICE]",
         aggfunc="first"
     )
 
@@ -852,14 +852,14 @@ def page():
         id_vars=["ROUND"] + scope_cols,
         value_vars=vendor_cols,
         var_name="VENDOR",
-        value_name="PVAL"
+        value_name="[PRICE]"
     )
 
     # PIVOT
     df_pivot = df_long.pivot_table(
         index=["VENDOR"] + scope_cols,
         columns="ROUND",
-        values="PVAL",
+        values="[PRICE]",
         aggfunc="first"
     ).reset_index()
 
