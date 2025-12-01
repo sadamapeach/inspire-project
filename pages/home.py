@@ -135,7 +135,7 @@ def page():
             }
             </style>
 
-            <a href="https://inspire-project-analytics-tool.streamlit.app/1_TCO_Comparison_by_Year">
+            <a href="https://inspire-project-user-guide-tco-comparison-by-region.streamlit.app/">
                 <div class="hover-div2">
                     <img src="https://cdn-icons-png.flaticon.com/512/15366/15366033.png" width="35" />
                 </div>
@@ -164,7 +164,7 @@ def page():
                 height: 65px;
             ">
                 <div style="text-align: justify; font-size: 15px;">
-                    <a href="https://inspire-project-analytics-tool.streamlit.app/1_TCO_Comparison_by_Year"
+                    <a href="https://inspire-project-user-guide-tco-comparison-by-region.streamlit.app/"
                     class="hover-link2">TCO Comparison by Region</a>
                     analyzes TCO differences across regions to highlight cost variations based on geographic 
                     requirements.
@@ -203,7 +203,7 @@ def page():
             }
             </style>
 
-            <a href="https://inspire-project-analytics-tool.streamlit.app/1_TCO_Comparison_by_Year">
+            <a href="https://inspire-project-user-guide-tco-comparison-by-year-region.streamlit.app/">
                 <div class="hover-div3">
                     <img src="https://cdn-icons-png.flaticon.com/512/4624/4624053.png" width="35" />
                 </div>
@@ -232,7 +232,7 @@ def page():
                 height: 65px;
             ">
                 <div style="text-align: justify; font-size: 15px;">
-                    <a href="https://inspire-project-analytics-tool.streamlit.app/1_TCO_Comparison_by_Year"
+                    <a href="https://inspire-project-user-guide-tco-comparison-by-year-region.streamlit.app/"
                     class="hover-link3">TCO Comparison by Year + Region</a>
                     combines yearly and regional TCO analysis to provide a more comprehensive view of 
                     vendor pricing across time and location.
@@ -271,7 +271,7 @@ def page():
             }
             </style>
 
-            <a href="https://inspire-project-analytics-tool.streamlit.app/1_TCO_Comparison_by_Year">
+            <a href="https://inspire-project-user-guide-tco-comparison-round-by-round.streamlit.app/">
                 <div class="hover-div4">
                     <img src="https://cdn-icons-png.flaticon.com/512/4624/4624081.png" width="35" />
                 </div>
@@ -300,7 +300,7 @@ def page():
                 height: 65px;
             ">
                 <div style="text-align: justify; font-size: 15px;">
-                    <a href="https://inspire-project-analytics-tool.streamlit.app/1_TCO_Comparison_by_Year"
+                    <a href="https://inspire-project-user-guide-tco-comparison-round-by-round.streamlit.app/"
                     class="hover-link4">TCO Comparison Round by Round</a>
                     evaluates TCO changes across negotiation rounds to track vendor pricing progress and
                     identify the most competitive movements.
@@ -339,7 +339,7 @@ def page():
             }
             </style>
 
-            <a href="https://inspire-project-analytics-tool.streamlit.app/1_TCO_Comparison_by_Year">
+            <a href="https://inspire-project-user-guide-upl-comparison.streamlit.app/">
                 <div class="hover-div5">
                     <img src="https://cdn-icons-png.flaticon.com/512/4624/4624116.png" width="35" />
                 </div>
@@ -368,7 +368,7 @@ def page():
                 height: 65px;
             ">
                 <div style="text-align: justify; font-size: 15px;">
-                    <a href="https://inspire-project-analytics-tool.streamlit.app/1_TCO_Comparison_by_Year"
+                    <a href="https://inspire-project-user-guide-upl-comparison.streamlit.app/"
                     class="hover-link5">UPL Comparison</a>
                     compares UPL values across multiple vendors in order to identify and determine the most 
                     competitive item-level pricing.
@@ -406,7 +406,7 @@ def page():
             }
             </style>
 
-            <a href="https://inspire-project-analytics-tool.streamlit.app/1_TCO_Comparison_by_Year">
+            <a href="https://inspire-project-user-guide-upl-comparison-round-by-round.streamlit.app/">
                 <div class="hover-div6">
                     <img src="https://cdn-icons-png.flaticon.com/512/4624/4624030.png" width="35" />
                 </div>
@@ -435,7 +435,7 @@ def page():
                 height: 65px;
             ">
                 <div style="text-align: justify; font-size: 15px;">
-                    <a href="https://inspire-project-analytics-tool.streamlit.app/1_TCO_Comparison_by_Year"
+                    <a href="https://inspire-project-user-guide-upl-comparison-round-by-round.streamlit.app/"
                     class="hover-link6">UPL Comparison Round by Round</a>
                     tracks UPL adjustments throughout negotiation rounds to understand pricing dynamics
                     at the item level.
@@ -473,7 +473,7 @@ def page():
             }
             </style>
 
-            <a href="https://inspire-project-analytics-tool.streamlit.app/1_TCO_Comparison_by_Year">
+            <a href="https://inspire-project-user-guide-standard-deviation.streamlit.app/">
                 <div class="hover-div7">
                     <img src="https://cdn-icons-png.flaticon.com/512/4624/4624098.png" width="35" />
                 </div>
@@ -502,7 +502,7 @@ def page():
                 height: 65px;
             ">
                 <div style="text-align: justify; font-size: 15px;">
-                    <a href="https://inspire-project-analytics-tool.streamlit.app/1_TCO_Comparison_by_Year"
+                    <a href="https://inspire-project-user-guide-standard-deviation.streamlit.app/"
                     class="hover-link7">Standard Deviation</a>
                     measures the price variation across vendors to assess pricing stability 
                     and the consistency of commercial offers.
