@@ -370,8 +370,8 @@ def page():
                 <div style="text-align: justify; font-size: 15px;">
                     <a href="https://inspire-project-analytics-tool.streamlit.app/1_TCO_Comparison_by_Year"
                     class="hover-link5">UPL Comparison</a>
-                    compares UPL values across vendors to determine the most competitive 
-                    item-level pricing.
+                    compares UPL values across multiple vendors in order to identify and determine the most 
+                    competitive item-level pricing.
                 </div>
             </div>
             """,
