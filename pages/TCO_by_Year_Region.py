@@ -539,14 +539,14 @@ def page():
         id_vars=[vendor_col, year_col, scope_col] + other_non_num,
         value_vars=region_cols,
         var_name="REGION",
-        value_name="PRICE"
+        value_name="PVAL"
     )
 
     # --- Rapikan urutan kolom ---
     final_cols = (
         [vendor_col, year_col, "REGION", scope_col] 
         + other_non_num 
-        + ["PRICE"]
+        + ["PVAL"]
     )
 
     df_cost_summary = df_cost_summary[final_cols]
@@ -557,7 +557,7 @@ def page():
     # Format Rupiah untuk kolom PRICE
     df_cost_summary_styled = (
         df_cost_summary.style
-        .format({"PRICE": format_rupiah})
+        .format({"PVAL": format_rupiah})
         .apply(highlight_total_per_year, axis=1)
         .apply(highlight_vendor_total, axis=1)
     )
@@ -586,7 +586,7 @@ def page():
     year_col = df_cost_summary.columns[1]
     region_col = "REGION"
     scope_col = df_cost_summary.columns[3]
-    price_col = "PRICE"
+    price_col = "PVAL"
 
     # Tab1: YEAR
     # --- Hapus baris TOTAL agar tidak double count ---
@@ -598,7 +598,7 @@ def page():
     tco_year = tco_year_clean.pivot_table(
         index=year_col,
         columns="VENDOR",
-        values="PRICE",
+        values="PVAL",
         aggfunc="sum",
         fill_value=0
     ).reset_index()
@@ -645,7 +645,7 @@ def page():
     tco_region = tco_region_clean.pivot_table(
         index=region_col,
         columns=vendor_col,
-        values="PRICE",
+        values="PVAL",
         aggfunc="sum",
         fill_value=0
     ).reset_index()
@@ -747,16 +747,16 @@ def page():
         id_vars=[vendor_col, year_col, scope_col] + extra_non_num,
         value_vars=[c for c in numeric_cols if c.upper() != "TOTAL"],
         var_name="REGION",
-        value_name="PRICE"
+        value_name="PVAL"
     )
 
-    df_melted["PRICE"] = pd.to_numeric(df_melted["PRICE"], errors="coerce").fillna(0)
+    df_melted["PVAL"] = pd.to_numeric(df_melted["PVAL"], errors="coerce").fillna(0)
 
     # --- Pivot untuk jadi format kolom per vendor ---
     df_pivot = df_melted.pivot_table(
         index=[year_col, "REGION", scope_col] + extra_non_num,
         columns=vendor_col,
-        values="PRICE",
+        values="PVAL",
         aggfunc="sum",
         fill_value=0
     ).reset_index()

@@ -5,6 +5,7 @@ import altair as alt
 import time
 import math
 import os
+import re
 from io import BytesIO
 
 def round_half_up_num(series):
@@ -507,14 +508,14 @@ def page():
         id_vars=["ROUND", "VENDOR"] + non_num_cols,
         value_vars=price_cols,
         var_name="PRICE_COL",
-        value_name="PRICE"
+        value_name="PVAL"
     )
 
     # Pivot ke format wide (Vendor Round)
     df_pivot = df_long.pivot_table(
         index=non_num_cols,
         columns=["VENDOR", "ROUND"],
-        values="PRICE",
+        values="PVAL",
         aggfunc="first"
     )
 
@@ -872,8 +873,35 @@ def page():
     # Pisahkan kembali SCOPE_KEY ke kolom scope asli
     df_pivot[scope_cols] = df_pivot["SCOPE_KEY"].str.split("|", expand=True)
 
-    # --- Susun ulang kolom: vendor, scope_cols, rounds ---
-    round_order = list(df[round_col].unique())
+    # Fungsi untuk mengekstrak nomor round dari string, misal "L2R4" → 4
+    def extract_round_number(name):
+        """
+        Extracts the round number from various round naming formats:
+        - 'L2R4' -> 4
+        - 'Round 3' -> 3
+        - '4' -> 4
+        If no number is found, returns a large number to push it to the end.
+        """
+        name = str(name)
+        
+        # Coba cari pola R<number> dulu (untuk L2R4)
+        m = re.search(r'R(\d+)', name)
+        if m:
+            return int(m.group(1))
+        
+        # Kalau tidak ada, ambil angka pertama yang muncul di string
+        m2 = re.search(r'\d+', name)
+        if m2:
+            return int(m2.group())
+        
+        # Jika tidak ketemu angka sama sekali
+        return 9999
+
+    # Ambil semua nama round unik dan urutkan berdasarkan nomor round
+    round_order = sorted(df[round_col].unique(), key=extract_round_number)
+
+    # # --- Susun ulang kolom: vendor, scope_cols, rounds ---
+    # round_order = list(df[round_col].unique())
     df_pivot = df_pivot[[vendor_col, *scope_cols, "__order", *round_order, "SCOPE_KEY"]]
 
     # Sorting sesuai urutan kemunculan asli scope per vendor

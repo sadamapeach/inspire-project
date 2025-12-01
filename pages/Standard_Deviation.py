@@ -335,11 +335,11 @@ def page():
     df_long = df_clean.melt(
         id_vars=non_num_cols, 
         var_name="Vendor", 
-        value_name="Price"
-    ).dropna(subset=["Price"])
+        value_name="PVAL"
+    ).dropna(subset=["PVAL"])
 
     # Rank
-    df_long["Rank"] = df_long.groupby(non_num_cols)["Price"].rank(method="min")
+    df_long["Rank"] = df_long.groupby(non_num_cols)["PVAL"].rank(method="min")
 
     # Fungsi ordinal
     def ordinal(n):
@@ -354,7 +354,7 @@ def page():
     # Grouping
     for keys, group in df_long.groupby(non_num_cols):
         group = group.sort_values("Rank").reset_index(drop=True)
-        base_price = group.loc[0, "Price"]
+        base_price = group.loc[0, "PVAL"]
 
         row_data = {}
 
@@ -369,7 +369,7 @@ def page():
         for i in range(1, len(group)):
             r = i + 1
             vendor = group.loc[i, "Vendor"]
-            price = group.loc[i, "Price"]
+            price = group.loc[i, "PVAL"]
 
             deviation = (
                 ((price - base_price) / base_price) * 100

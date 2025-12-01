@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import altair as alt
 import time
+import re
 import os
 from io import BytesIO
 
@@ -265,6 +266,30 @@ def get_excel_download_highlight_1st_2nd_lowest(df, sheet_name="Sheet1"):
 
     return output.getvalue()
 
+# Fungsi untuk mengekstrak nomor round dari string, misal "L2R4" → 4
+def extract_round_number(name):
+    """
+    Extracts the round number from various round naming formats:
+    - 'L2R4' -> 4
+    - 'Round 3' -> 3
+    - '4' -> 4
+    If no number is found, returns a large number to push it to the end.
+    """
+    name = str(name)
+    
+    # Coba cari pola R<number> dulu (untuk L2R4)
+    m = re.search(r'R(\d+)', name)
+    if m:
+        return int(m.group(1))
+    
+    # Kalau tidak ada, ambil angka pertama yang muncul di string
+    m2 = re.search(r'\d+', name)
+    if m2:
+        return int(m2.group())
+    
+    # Jika tidak ketemu angka sama sekali
+    return 9999
+
 def page():
     # Header Title
     st.header("4️⃣ TCO Comparison Round by Round")
@@ -457,6 +482,23 @@ def page():
     # STEP 4: MERGE SEMUA FILEE
     df_merge = pd.concat(all_rounds, ignore_index=True)
 
+    # --- Buat kolom urutan ROUND ---
+    df_merge["ROUND_ORDER"] = df_merge["ROUND"].apply(extract_round_number)
+
+    # --- Tandai baris TOTAL ---
+    df_merge["IS_TOTAL"] = df_merge.apply(
+        lambda r: 1 if str(r.iloc[1]).strip().upper() == "TOTAL" else 0,
+        axis=1
+    )
+
+    # --- Sort ROUND dulu, lalu pastikan TOTAL paling bawah tiap ROUND ---
+    df_merge = (
+        df_merge
+        .sort_values(["ROUND_ORDER", "IS_TOTAL"])
+        .drop(columns=["ROUND_ORDER", "IS_TOTAL"])
+        .reset_index(drop=True)
+    )
+
     # Simpan ke session
     st.session_state["merge_tco_by_round"] = df_merge
     st.session_state["already_processed_tco_by_round"] = True
@@ -508,11 +550,11 @@ def page():
         id_vars=["ROUND"] + scope_cols,
         value_vars=vendor_cols,
         var_name="VENDOR",
-        value_name='PRICE'
+        value_name="PVAL"
     )
 
     # Reorder
-    final_cols = ["ROUND", "VENDOR"] + scope_cols + ["PRICE"]
+    final_cols = ["ROUND", "VENDOR"] + scope_cols + ["PVAL"]
     df_summary = df_summary[final_cols]
 
     # Sort
@@ -593,14 +635,14 @@ def page():
         id_vars=["ROUND"] + scope_cols,
         value_vars=vendor_cols,
         var_name="VENDOR",
-        value_name="PRICE"
+        value_name="PVAL"
     )
 
     # Pivot
     df_ppivot = df_plong.pivot_table(
         index=scope_cols,
         columns=["VENDOR", "ROUND"],
-        values="PRICE",
+        values="PVAL",
         aggfunc="first"
     )
 
@@ -810,14 +852,14 @@ def page():
         id_vars=["ROUND"] + scope_cols,
         value_vars=vendor_cols,
         var_name="VENDOR",
-        value_name="PRICE"
+        value_name="PVAL"
     )
 
     # PIVOT
     df_pivot = df_long.pivot_table(
         index=["VENDOR"] + scope_cols,
         columns="ROUND",
-        values="PRICE",
+        values="PVAL",
         aggfunc="first"
     ).reset_index()
 
