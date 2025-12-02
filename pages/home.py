@@ -513,3 +513,19 @@ def page():
         )
 
     st.divider()
+
+    # Video Tutorial
+    st.subheader("Video Tutorial")
+
+    st.markdown(
+    """
+        <div style="text-align: justify; font-size: 15px; margin-bottom: 10px; margin-top:-10px;">
+            I have also included a video tutorial, which you can access through the 
+            <span style="background:#FF0000; padding:2px 4px; border-radius:6px; font-weight:600; 
+            font-size: 0.75rem; color: black">YouTube</span> link below.
+        </div>
+    """,
+    unsafe_allow_html=True
+)
+
+    st.video("https://youtu.be/1p_WerKwFJA?si=vevaZRIjFDUlIz_X")
