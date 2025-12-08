@@ -70,119 +70,118 @@ def page():
         all_df = st.session_state["all_df_table_extraction_raw"]
     else:
         return
-    
-    st.divider()
 
+    st.write("")
     # ====== TABLE EXTRACTION ======
+    st.markdown("##### 📑 Result")
     all_sheets_tables = {}
 
-    for sheet_name, df_raw in all_df.items():
-        df = df_raw.copy()
+    sheet_tabs = st.tabs(list(all_df.keys()))
 
-        # Logic 1: Split berdasarkan ROW kosong
-        tables = []
-        current_table = []
+    for tab, (sheet_name, df_raw) in zip(sheet_tabs, all_df.items()):
+        with tab:
+            df = df_raw.copy()
 
-        # Split berdasarkan row kosong
-        for idx, row in df.iterrows():
-            if row.isna().all():
-                if current_table:
-                    tables.append(pd.DataFrame(current_table))
-                    current_table = []
-            else:
-                current_table.append(row)
+            # Logic 1: Split berdasarkan ROW kosong
+            tables = []
+            current_table = []
 
-        if current_table:
-            tables.append(pd.DataFrame(current_table))
-
-        # Logic 2: Horizontal split berdasarkan NaN col
-        final_tables = []
-
-        for t in tables:
-            # Cari kolom tidak kosong
-            non_empty_cols = [c for c in t.columns if not t[c].isna().all()]
-            if not non_empty_cols:
-                continue
-
-            blocks = []
-            current_block = [non_empty_cols[0]]
-
-            # Horizontal block detection
-            for col in non_empty_cols[1:]:
-                prev = t.columns.get_loc(current_block[-1])
-                curr = t.columns.get_loc(col)
-
-                if curr == prev + 1:
-                    current_block.append(col)
+            # Split berdasarkan row kosong
+            for idx, row in df.iterrows():
+                if row.isna().all():
+                    if current_table:
+                        tables.append(pd.DataFrame(current_table))
+                        current_table = []
                 else:
-                    blocks.append(current_block)
-                    current_block = [col]
+                    current_table.append(row)
 
-            blocks.append(current_block)
+            if current_table:
+                tables.append(pd.DataFrame(current_table))
 
-            # Extract per-block
-            for block_cols in blocks:
-                df_block = t[block_cols].copy()
-                final_tables.append(df_block)
+            # Logic 2: Horizontal split berdasarkan NaN col
+            final_tables = []
 
-        # Logic 3: Cleaning NaN row -> already clean the NaN col on the 2nd step
-        clean_tables = []
+            for t in tables:
+                # Cari kolom tidak kosong
+                non_empty_cols = [c for c in t.columns if not t[c].isna().all()]
+                if not non_empty_cols:
+                    continue
 
-        for t in final_tables:
-            df_clean = t.copy()
-            df_clean = df_clean.dropna(axis=0, how='all')
+                blocks = []
+                current_block = [non_empty_cols[0]]
 
-            # Gunakan baris pertama sebagai header (hanya jika kolom belum ada nama atau Unnamed)
-            if any("Unnamed" in str(c) for c in df_clean.columns):
-                df_clean.columns = df_clean.iloc[0]
-                df_clean = df_clean[1:].reset_index(drop=True)
+                # Horizontal block detection
+                for col in non_empty_cols[1:]:
+                    prev = t.columns.get_loc(current_block[-1])
+                    curr = t.columns.get_loc(col)
 
-            # Konversi tipe data otomatis ke pandas dtypes yang lebih fleksibel
-            df_clean = df_clean.convert_dtypes()
+                    if curr == prev + 1:
+                        current_block.append(col)
+                    else:
+                        blocks.append(current_block)
+                        current_block = [col]
 
-            # Bersihkan tipe numpy di kolom, index, dan isi
-            def safe_convert(x):
-                if isinstance(x, (np.generic, np.number)):
-                    return x.item()
-                return x
+                blocks.append(current_block)
 
-            # Terapkan ke seluruh dataframe
-            df_clean = df_clean.applymap(safe_convert)
-            df_clean.columns = [safe_convert(c) for c in df_clean.columns]
-            df_clean.index = [safe_convert(i) for i in df_clean.index]
+                # Extract per-block
+                for block_cols in blocks:
+                    df_block = t[block_cols].copy()
+                    final_tables.append(df_block)
 
-            # Paksa semua header & index ke string agar JSON safe untuk Streamlit
-            df_clean.columns = df_clean.columns.map(str)
-            df_clean.index = df_clean.index.map(str)
+            # Logic 3: Cleaning NaN row -> already clean the NaN col on the 2nd step
+            clean_tables = []
 
-            # Pembulatan
-            num_cols = df_clean.select_dtypes(include=["number"]).columns
-            df_clean[num_cols] = df_clean[num_cols].apply(round_half_up)
+            for i, t in enumerate(final_tables, start=1):
+                df_clean = t.copy()
+                df_clean = df_clean.dropna(axis=0, how='all')
 
-            # Format Rupiah
-            df_clean_styled = df_clean.style.format({col: format_rupiah for col in num_cols})
+                # Gunakan baris pertama sebagai header (hanya jika kolom belum ada nama atau Unnamed)
+                if any("Unnamed" in str(c) for c in df_clean.columns):
+                    df_clean.columns = df_clean.iloc[0]
+                    df_clean = df_clean[1:].reset_index(drop=True)
 
-            st.markdown(
-                f"""
-                <div style='display: flex; justify-content: space-between; 
-                            align-items: center; margin-bottom: 8px;'>
-                    <span style='font-size:15px;'>✨ {sheet_name}</span>
-                    <span style='font-size:12px; color:#808080;'>
-                        Total rows: <b>{len(df_clean):,}</b>
-                    </span>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-            st.dataframe(df_clean_styled, hide_index=True)
+                # Konversi tipe data otomatis ke pandas dtypes yang lebih fleksibel
+                df_clean = df_clean.convert_dtypes()
 
-            clean_tables.append(df_clean)
+                # Bersihkan tipe numpy di kolom, index, dan isi
+                def safe_convert(x):
+                    if isinstance(x, (np.generic, np.number)):
+                        return x.item()
+                    return x
 
-        # Simpan hasil clean tables per sheet
-        all_sheets_tables[sheet_name] = clean_tables
+                # Terapkan ke seluruh dataframe
+                df_clean = df_clean.applymap(safe_convert)
+                df_clean.columns = [safe_convert(c) for c in df_clean.columns]
+                df_clean.index = [safe_convert(i) for i in df_clean.index]
 
-        # # Display
-        # st.write(f"✨ {sheet_name}")
-        # for i, t in enumerate(clean_tables, start=1):
-        #     st.write(f"Table {i}")
-        #     st.dataframe(t, use_container_width=True)
+                # Paksa semua header & index ke string agar JSON safe untuk Streamlit
+                df_clean.columns = df_clean.columns.map(str)
+                df_clean.index = df_clean.index.map(str)
+
+                # Pembulatan
+                num_cols = df_clean.select_dtypes(include=["number"]).columns
+                df_clean[num_cols] = df_clean[num_cols].apply(round_half_up)
+
+                # Format Rupiah
+                df_clean_styled = df_clean.style.format({col: format_rupiah for col in num_cols})
+
+                st.markdown(
+                    f"""
+                    <div style='display: flex; justify-content: space-between; 
+                                align-items: center; margin-bottom: 8px;'>
+                        <span style='font-size:14px;'>✨ {sheet_name} - Table {i}</span>
+                        <span style='font-size:12px; color:#808080;'>
+                            Total rows: <b>{len(df_clean):,}</b>
+                        </span>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+                st.dataframe(df_clean_styled, hide_index=True)
+
+                clean_tables.append(df_clean)
+
+            # Simpan hasil clean tables per sheet
+            all_sheets_tables[sheet_name] = clean_tables
+
+    st.divider()
