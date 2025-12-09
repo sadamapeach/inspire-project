@@ -185,3 +185,69 @@ def page():
             all_sheets_tables[sheet_name] = clean_tables
 
     st.divider()
+
+    # SUPERR BOTTONN
+    st.markdown("##### 🧑‍💻 Super Download — Export Selected Sheets")
+
+    # Fungsi untuk convert list of DataFrame per sheet ke Excel
+    def to_excel(dfs_dict):
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            workbook = writer.book
+
+            # Format rupiah
+            format_rupiah_excel = workbook.add_format({'num_format': '#,##0.00'})
+
+            for sheet_name, dfs in dfs_dict.items():
+                for idx, df in enumerate(dfs, start=1):
+                    df = df.copy()
+
+                    numeric_cols = df.select_dtypes(include=['float', 'int']).columns
+                    for col in numeric_cols:
+                        df[col] = round_half_up(df[col])
+
+                    sheet_tab_name = f"{sheet_name}_Table{idx}"
+
+                    df.to_excel(writer, sheet_name=sheet_tab_name, index=False)
+
+                    worksheet = writer.sheets[sheet_tab_name]
+
+                    for col_idx, col_name in enumerate(df.columns):
+                        if col_name in numeric_cols:
+                            # apply number format to the entire column
+                            worksheet.set_column(col_idx, col_idx, 18, format_rupiah_excel)
+
+        return output.getvalue()
+    
+    # Buat multiselect untuk user pilih sheet
+    selected_sheets = st.multiselect(
+        "Select sheets to download in a single Excel file:",
+        options=list(all_sheets_tables.keys()),
+        default=list(all_sheets_tables.keys())
+    )
+
+    # --- FRAGMENT UNTUK BALLOONS ---
+    @st.fragment
+    def release_the_balloons():
+        st.balloons()
+
+    # ---- DOWNLOAD BUTTON ----
+    if selected_sheets:
+        # Filter dict sesuai pilihan user
+        dfs_to_export = {k: v for k, v in all_sheets_tables.items() if k in selected_sheets}
+        
+        # Generate Excel
+        excel_data = to_excel(dfs_to_export)
+
+        # Tombol download
+        st.download_button(
+            label="Download",
+            data=excel_data,
+            file_name="Table Extraction.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            on_click=release_the_balloons,
+            type="primary",
+            use_container_width=True,        
+        )
+    else:
+        st.info("Select at least one sheet to download.")
