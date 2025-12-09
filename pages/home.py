@@ -1,11 +1,5 @@
 import streamlit as st
-import pages.TCO_by_Year as TCO_by_Year
-import pages.TCO_by_Region as TCO_by_Region
-import pages.TCO_by_Year_Region as TCO_by_Year_Region
-import pages.TCO_by_Round as TCO_by_Round
-import pages.UPL_Comparison as UPL_Comparison
-import pages.UPL_Comparison_Round as UPL_Comparison_Round
-import pages.Standard_Deviation as Standard_Deviation
+import pandas as pd
 
 def page():
     st.header("🏡 Intro: Bid & Price Analytics Tool")
@@ -26,7 +20,7 @@ def page():
     # st.image("https://i.pinimg.com/originals/61/8f/08/618f083c61a7460ce0a6064319af41bd.gif")
 
     st.markdown("""
-        <div style="text-align: justify; font-size: 15px; margin-bottom: 30px">
+        <div style="text-align: justify; font-size: 15px; margin-bottom: 20px">
             <span style="color: orange; font-weight: 600;"> Bid & Price Analytics Tool</span>
             is a <a href="https://streamlit.io" target="_blank" 
             style="color:#4DA3FF;">
@@ -35,11 +29,104 @@ def page():
             most competitive offers, and generating clear, ready-to-share analytical outputs.
         </div>
     """, unsafe_allow_html=True)
-    
+
     # Main Features
-    # st.markdown("#### Main Features")
-    st.subheader("Main Features")
-    # st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+    # st.subheader("Main Features")
+    st.markdown("#### Main Features")
+
+    columns = ["Features", "Description"]
+    data = [
+        [
+            "Data Cleaning",
+            "Provides a single menu to extract multiple table at once"
+        ],
+
+        [
+            "Analysis Modules",
+            "Provides 7 menus to generate comprehensive comparisons and data summaries"
+        ]
+    ]
+    df = pd.DataFrame(data, columns=columns)
+    st.dataframe(df, hide_index=True)
+
+    st.divider()
+
+    # Data Cleaning
+    # st.subheader("Data Cleaning")
+    st.markdown("#### Data Cleaning")
+    st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+
+    # ✂️ Table Extraction
+    col1, col2 = st.columns([1, 9])  # kiri lebih sempit
+
+    with col1:
+        st.markdown(
+            """
+            <style>
+            .hover-div {
+                background-color: #BC13FE;
+                border-radius: 8px;
+                padding: 20px;
+                width: 65px;
+                height: 65px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+                transition: background-color 0.3s, transform 0.3s;
+            }
+
+            .hover-div:hover {
+                background-color: #E299FF;
+                transform: scale(1.05);
+            }
+            </style>
+
+            <a href="https://inspire-project-user-guide-tco-comparison-by-year.streamlit.app/">
+                <div class="hover-div">
+                    <img src="https://cdn-icons-png.flaticon.com/512/14991/14991730.png" width="35" />
+                </div>
+            </a>
+            """,
+            unsafe_allow_html=True
+        )
+
+    with col2:
+        st.markdown(
+            """
+            <style>
+            a.hover-link {
+                color: #BC13FE;
+                font-weight: 800;
+                text-decoration: none;
+            }
+            a.hover-link:hover {
+                color: #E299FF;
+            }
+            </style>
+
+            <div style="
+                display: flex;
+                align-items: center;
+                height: 65px;
+            ">
+                <div style="text-align: justify; font-size: 15px;">
+                    <a href="https://inspire-project-user-guide-tco-comparison-by-year.streamlit.app/"
+                    class="hover-link">TCO Comparison by Year</a>
+                    compares TCO across vendors by analyzing year-over-year price changes to identify long-
+                    term cost trends.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    st.divider()
+    
+    # Analysis Modules
+    # st.subheader("Analysis Modules")
+    st.markdown("#### Analysis Modules")
+    st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
     # 1️⃣ TCO Comparison by Year
     col1, col2 = st.columns([1, 9])  # kiri lebih sempit
@@ -515,7 +602,8 @@ def page():
     st.divider()
 
     # Video Tutorial
-    st.subheader("Video Tutorial")
+    # st.subheader("Video Tutorial")
+    st.markdown("#### Video Tutorial")
 
     st.markdown(
     """
