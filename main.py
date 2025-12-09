@@ -14,6 +14,10 @@ pages = {
         st.Page(home.page, title="🏡 Home", url_path="Home"),
     ],
 
+    "Data Cleaning": [
+        st.Page(Table_Extraction.page, title="✂️ Table Extraction", url_path="Table_Extraction"),
+    ],
+
     "Analysis Modules": [
         st.Page(TCO_by_Year.page, title="1️⃣ TCO Comparison by Year", url_path="1_TCO_Comparison_by_Year"),
         st.Page(TCO_by_Region.page, title="2️⃣ TCO Comparison by Region", url_path="2_TCO_Comparison_by_Region"),
@@ -24,9 +28,9 @@ pages = {
         st.Page(Standard_Deviation.page, title="7️⃣ Standard Deviation", url_path="7_Standard_Deviation"),
     ],
 
-    "Data Cleaning": [
-        st.Page(Table_Extraction.page, title="✂️ Table Extraction", url_path="Table_Extraction"),
-    ],
+    # "Data Cleaning": [
+    #     st.Page(Table_Extraction.page, title="✂️ Table Extraction", url_path="Table_Extraction"),
+    # ],
 }
 
 pg = st.navigation(pages)

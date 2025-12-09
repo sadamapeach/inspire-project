@@ -35,7 +35,7 @@ def page():
     st.markdown(
         ":red-badge[Indosat] :orange-badge[Ooredoo] :green-badge[Hutchison]"
     )
-    st.caption("Upload your pricing template — the tool will generate your analytics summary automatically ✨")
+    st.caption("Upload your file — the tool will identify and split multiple tables within your sheets automatically ✨")
 
     # Divider custom
     st.markdown(
@@ -150,7 +150,7 @@ def page():
                     return x
 
                 # Terapkan ke seluruh dataframe
-                df_clean = df_clean.applymap(safe_convert)
+                df_clean = df_clean.map(safe_convert)
                 df_clean.columns = [safe_convert(c) for c in df_clean.columns]
                 df_clean.index = [safe_convert(i) for i in df_clean.index]
 
