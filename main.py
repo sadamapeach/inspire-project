@@ -7,7 +7,7 @@ import pages.TCO_by_Round as TCO_by_Round
 import pages.UPL_Comparison as UPL_Comparison
 import pages.UPL_Comparison_Round as UPL_Comparison_Round
 import pages.Standard_Deviation as Standard_Deviation
-import pages.dc_table_extraction as dc_table_extraction
+import pages.Table_Extraction as Table_Extraction
 
 pages = {
     "": [  # Kategori kosong → tampil tanpa nama (Home di luar section)
@@ -25,7 +25,7 @@ pages = {
     ],
 
     "Data Cleaning": [
-        st.Page(dc_table_extraction.page, title="✂️ Table Extraction", url_path="Table_Extraction"),
+        st.Page(Table_Extraction.page, title="✂️ Table Extraction", url_path="Table_Extraction"),
     ],
 }
 
