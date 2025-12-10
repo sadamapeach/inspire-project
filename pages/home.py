@@ -64,7 +64,7 @@ def page():
             """
             <style>
             .hover-div {
-                background-color: #BC13FE;
+                background-color: #0073FF;
                 border-radius: 8px;
                 padding: 20px;
                 width: 65px;
@@ -77,14 +77,14 @@ def page():
             }
 
             .hover-div:hover {
-                background-color: #E299FF;
+                background-color: #99C2FF;
                 transform: scale(1.05);
             }
             </style>
 
             <a href="https://inspire-project-user-guide-tco-comparison-by-year.streamlit.app/">
                 <div class="hover-div">
-                    <img src="https://cdn-icons-png.flaticon.com/512/14991/14991730.png" width="35" />
+                    <img src="https://cdn-icons-png.flaticon.com/512/4624/4624188.png" width="35" />
                 </div>
             </a>
             """,
@@ -96,12 +96,12 @@ def page():
             """
             <style>
             a.hover-link {
-                color: #BC13FE;
+                # color: #0073FF;
                 font-weight: 800;
                 text-decoration: none;
             }
             a.hover-link:hover {
-                color: #E299FF;
+                color: #99C2FF;
             }
             </style>
 
@@ -112,9 +112,9 @@ def page():
             ">
                 <div style="text-align: justify; font-size: 15px;">
                     <a href="https://inspire-project-user-guide-tco-comparison-by-year.streamlit.app/"
-                    class="hover-link">TCO Comparison by Year</a>
-                    compares TCO across vendors by analyzing year-over-year price changes to identify long-
-                    term cost trends.
+                    class="hover-link">Table Extraction</a>
+                    is used to extract tables from multi-sheet files where each sheet may contain multiple
+                    tables, arranged either horizontally or vertically.
                 </div>
             </div>
             """,
@@ -135,7 +135,7 @@ def page():
         st.markdown(
             """
             <style>
-            .hover-div {
+            .hover-div1 {
                 background-color: #BC13FE;
                 border-radius: 8px;
                 padding: 20px;
@@ -148,14 +148,14 @@ def page():
                 transition: background-color 0.3s, transform 0.3s;
             }
 
-            .hover-div:hover {
+            .hover-div1:hover {
                 background-color: #E299FF;
                 transform: scale(1.05);
             }
             </style>
 
             <a href="https://inspire-project-user-guide-tco-comparison-by-year.streamlit.app/">
-                <div class="hover-div">
+                <div class="hover-div1">
                     <img src="https://cdn-icons-png.flaticon.com/512/14991/14991730.png" width="35" />
                 </div>
             </a>
@@ -167,12 +167,12 @@ def page():
         st.markdown(
             """
             <style>
-            a.hover-link {
+            a.hover-link1 {
                 color: #BC13FE;
                 font-weight: 800;
                 text-decoration: none;
             }
-            a.hover-link:hover {
+            a.hover-link1:hover {
                 color: #E299FF;
             }
             </style>
@@ -184,7 +184,7 @@ def page():
             ">
                 <div style="text-align: justify; font-size: 15px;">
                     <a href="https://inspire-project-user-guide-tco-comparison-by-year.streamlit.app/"
-                    class="hover-link">TCO Comparison by Year</a>
+                    class="hover-link1">TCO Comparison by Year</a>
                     compares TCO across vendors by analyzing year-over-year price changes to identify long-
                     term cost trends.
                 </div>
