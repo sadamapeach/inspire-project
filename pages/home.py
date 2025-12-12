@@ -113,7 +113,7 @@ def page():
                 <div style="text-align: justify; font-size: 15px;">
                     <a href="https://inspire-project-user-guide-tco-comparison-by-year.streamlit.app/"
                     class="hover-link">Table Extraction</a>
-                    is used to extract tables from multi-sheet files where each sheet may contain multiple
+                    is used to extract tables from multi-sheet files where each sheet contain multiple
                     tables, arranged either horizontally or vertically.
                 </div>
             </div>
