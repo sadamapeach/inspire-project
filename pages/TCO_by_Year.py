@@ -56,6 +56,34 @@ def highlight_1st_2nd_vendor(row, columns):
             # styles[i] = "background-color: #d7c6f3; color: #402e72;"
             styles[i] = "background-color: #FFEB9C; color: #9C6500;"
     return styles
+
+def highlight_rank_summary(row, num_cols):
+    styles = [""] * len(row)
+
+    # Ambil hanya nilai numeric (vendor)
+    numeric_vals = row[num_cols]
+
+    # Skip jika row numeric-nya kosong / NaN semua
+    if numeric_vals.dropna().empty:
+        return styles
+
+    # Sort numeric values
+    sorted_vals = numeric_vals.sort_values()
+
+    # Determine 1st & 2nd rank
+    first_vendor = sorted_vals.index[0]
+    second_vendor = sorted_vals.index[1] if len(sorted_vals) > 1 else None
+
+    # Apply styles
+    for i, col in enumerate(row.index):
+        if col == first_vendor:
+            styles[i] = "background-color: #F8CCCC; color: #8A1A1A;"  # lilac
+            # styles[i] = "background-color: #C6EFCE; color: #006100;"    # green
+        elif second_vendor and col == second_vendor:
+            styles[i] = "background-color: #FFE2B3; color: #A66200;"  # pink
+            # styles[i] = "background-color: #FFEB9C; color: #9C6500;"    # yellow
+
+    return styles
     
 # Download button to Excel
 @st.cache_data
@@ -412,7 +440,6 @@ def page():
 
     # TCO SUMMARY
     st.markdown("##### 💸 TCO Summary")
-    st.caption(f"The following table presents the summary of the analysis results.")
 
     # Merge semua sheet berdasarkan TCO Component (indeks kolom pertama)
     merged = None
@@ -466,6 +493,23 @@ def page():
         df_tco_summary.style
         .format({col: format_rupiah for col in num_cols})
         .apply(highlight_total_row_v2, axis=1)
+        .apply(lambda row: highlight_rank_summary(row, num_cols), axis=1)
+    )
+
+    st.markdown(
+        """
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+            <div style="font-size:0.88rem; color:gray; font-weight:550">
+                The following table presents the summary of the analysis results.
+            </div>
+            <div style="text-align:right;">
+                <span style="background:#F8CCCC; padding:2px 8px; border-radius:6px; font-weight:600; font-size: 0.75rem; color: black">1st Lowest</span>
+                &nbsp;
+                <span style="background:#FFE2B3; padding:2px 8px; border-radius:6px; font-weight:600; font-size: 0.75rem; color: black">2nd Lowest</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
     )
 
     st.session_state["merged_tco_by_year"] = df_tco_summary
@@ -594,7 +638,6 @@ def page():
             currency = st.session_state.get("tco_by_year_currency", "")
 
             st.markdown("###### Converted Price")
-            st.caption(f"Summary of total bidders after currency conversion to {currency} at a rate of {amount}.")
 
             # Identifikasi numeric & non-numeric columns
             num_cols = df_converted.select_dtypes(include=["number"]).columns.tolist()
@@ -621,6 +664,23 @@ def page():
                 df_tco_converted.style
                 .format({col: format_rupiah for col in num_cols_after})
                 .apply(highlight_total_row_v2, axis=1)
+                .apply(lambda row: highlight_rank_summary(row, num_cols_after), axis=1)
+            )
+
+            st.markdown(
+                f"""
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                    <div style="font-size:0.88rem; color:gray; font-weight:550">
+                        Summary of total bidders after converting to {currency} at a rate of {amount}.
+                    </div>
+                    <div style="text-align:right;">
+                        <span style="background:#F8CCCC; padding:2px 8px; border-radius:6px; font-weight:600; font-size: 0.75rem; color: black">1st Lowest</span>
+                        &nbsp;
+                        <span style="background:#FFE2B3; padding:2px 8px; border-radius:6px; font-weight:600; font-size: 0.75rem; color: black">2nd Lowest</span>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True
             )
 
             st.dataframe(converted_styled, hide_index=True)
