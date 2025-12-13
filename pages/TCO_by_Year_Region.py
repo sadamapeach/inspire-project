@@ -288,8 +288,15 @@ def get_excel_download_highlight_1st_2nd_lowest(df, sheet_name="Sheet1"):
 
 def page():
     # Header Title
-    # st.title("3️⃣ TCO Comparison by Year + Region")
-    st.markdown("## 3️⃣ TCO Comparison by Year + Region")
+    st.markdown(
+        """
+        <div style="font-size:2.25rem; font-weight:700; margin-bottom:9px">
+            3️⃣ TCO Comparison by Year + Region
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+    # st.markdown("##3️⃣ TCO Comparison by Year + Region")
     st.markdown(
         ":red-badge[Indosat] :orange-badge[Ooredoo] :green-badge[Hutchison]"
     )

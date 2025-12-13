@@ -4,7 +4,6 @@ import numpy as np
 import altair as alt
 import time
 import re
-import io
 from io import BytesIO
 
 def round_half_up(series):

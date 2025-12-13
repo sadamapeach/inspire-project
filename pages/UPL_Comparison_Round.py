@@ -260,7 +260,15 @@ def get_excel_download_highlight_price_trend(df, sheet_name="Sheet1"):
 
 def page():
     # Header Title
-    st.header("6️⃣ UPL Comparison Round by Round")
+    st.markdown(
+        """
+        <div style="font-size:2.25rem; font-weight:700; margin-bottom:9px">
+            6️⃣ UPL Comparison Round by Round
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+    # st.header("6️⃣ UPL Comparison Round by Round")
     st.markdown(
         ":red-badge[Indosat] :orange-badge[Ooredoo] :green-badge[Hutchison]"
     )

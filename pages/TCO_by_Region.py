@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import altair as alt
 import time
-import re
 from io import BytesIO
 
 def round_half_up(series):
@@ -173,7 +172,15 @@ def get_excel_download_highlight_1st_2nd_lowest(df, sheet_name="Sheet1"):
 
 def page():
     # Header Title
-    st.header("2️⃣ TCO Comparison by Region")
+    st.markdown(
+        """
+        <div style="font-size:2.25rem; font-weight:700; margin-bottom:9px">
+            2️⃣ TCO Comparison by Region
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+    # st.header("2️⃣ TCO Comparison by Region")
     st.markdown(
         ":red-badge[Indosat] :orange-badge[Ooredoo] :green-badge[Hutchison]"
     )
