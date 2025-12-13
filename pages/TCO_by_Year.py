@@ -59,10 +59,13 @@ def highlight_1st_2nd_vendor(row, columns):
 def highlight_rank_summary(row, num_cols):
     styles = [""] * len(row)
 
-    # Ambil hanya nilai numeric (vendor)
+    # Ambil nilai numeric vendor
     numeric_vals = row[num_cols]
 
-    # Skip jika row numeric-nya kosong / NaN semua
+    # EXCLUDE nilai 0 (vendor tidak ikut tender)
+    numeric_vals = numeric_vals[numeric_vals != 0]
+
+    # Skip jika kosong / NaN semua
     if numeric_vals.dropna().empty:
         return styles
 
@@ -76,11 +79,9 @@ def highlight_rank_summary(row, num_cols):
     # Apply styles
     for i, col in enumerate(row.index):
         if col == first_vendor:
-            # styles[i] = "background-color: #F8CCCC; color: #8A1A1A;"  # red
-            styles[i] = "background-color: #C6EFCE; color: #006100;"    # green
+            styles[i] = "background-color: #C6EFCE; color: #006100;"
         elif second_vendor and col == second_vendor:
-            # styles[i] = "background-color: #FFE2B3; color: #A66200;"  # orange
-            styles[i] = "background-color: #FFEB9C; color: #9C6500;"    # yellow
+            styles[i] = "background-color: #FFEB9C; color: #9C6500;"
 
     return styles
 
@@ -174,7 +175,6 @@ def get_excel_download_highlight_summary(df, sheet_name="Sheet1"):
             "num_format": "#,##0"
         })
 
-        # Rank formats
         format_first = workbook.add_format({
             "bg_color": "#C6EFCE",
             "font_color": "#006100",
@@ -187,7 +187,6 @@ def get_excel_download_highlight_summary(df, sheet_name="Sheet1"):
             "num_format": "#,##0"
         })
 
-        # Rank + TOTAL (bold)
         format_first_bold = workbook.add_format({
             "bg_color": "#C6EFCE",
             "font_color": "#006100",
@@ -208,36 +207,39 @@ def get_excel_download_highlight_summary(df, sheet_name="Sheet1"):
         # ================= LOOP DATA =================
         for row_idx, (_, row) in enumerate(df.iterrows(), start=1):
 
-            # ---- TOTAL row ----
             is_total = any(str(x).strip().upper() == "TOTAL" for x in row)
 
-            # ---- Ranking logic (TERMASUK TOTAL) ----
+            # ===== RANKING (EXCLUDE 0) =====
             numeric_vals = row[num_cols].dropna()
-            first_vendor, second_vendor = None, None
+            numeric_vals = numeric_vals[numeric_vals != 0]
 
+            first_vendor, second_vendor = None, None
             if not numeric_vals.empty:
                 sorted_vals = numeric_vals.sort_values()
                 first_vendor = sorted_vals.index[0]
                 if len(sorted_vals) > 1:
                     second_vendor = sorted_vals.index[1]
 
-            # ---- Write cells ----
+            # ===== WRITE CELL =====
             for col_idx, col in enumerate(df.columns):
                 value = row[col]
 
-                # NaN / inf safety
                 if pd.isna(value) or (isinstance(value, (int, float)) and np.isinf(value)):
                     value = ""
 
                 fmt = None
 
-                # ===== RANK FORMAT (PRIORITY TERTINGGI) =====
-                if col == first_vendor:
-                    fmt = format_first_bold if is_total else format_first
-                elif col == second_vendor:
-                    fmt = format_second_bold if is_total else format_second
+                # ----- NO HIGHLIGHT FOR ZERO -----
+                if value == 0:
+                    fmt = None
 
-                # ===== NUMERIC WRITE =====
+                else:
+                    if col == first_vendor:
+                        fmt = format_first_bold if is_total else format_first
+                    elif col == second_vendor:
+                        fmt = format_second_bold if is_total else format_second
+
+                # ----- WRITE -----
                 if col in num_cols and value != "":
                     worksheet.write_number(
                         row_idx,
@@ -255,11 +257,10 @@ def get_excel_download_highlight_summary(df, sheet_name="Sheet1"):
 
         # ================= AUTOFIT =================
         for i, col in enumerate(df.columns):
-            max_len = max(
-                df[col].astype(str).map(len).max(),
-                len(str(col))
-            ) + 2
-            worksheet.set_column(i, i, max_len)
+            worksheet.set_column(
+                i, i,
+                max(len(str(col)), df[col].astype(str).map(len).max()) + 2
+            )
 
     output.seek(0)
     return output.getvalue()
@@ -1437,8 +1438,8 @@ def page():
                 worksheet = writer.sheets[sheet]
 
                 # ===== FORMAT =====
-                fmt_rp = workbook.add_format({'num_format': '#,##0'})
-                fmt_pct = workbook.add_format({'num_format': '#,##0.0"%"'})
+                fmt_rp   = workbook.add_format({'num_format': '#,##0'})
+                fmt_pct  = workbook.add_format({'num_format': '#,##0.0"%"'})
                 fmt_bold = workbook.add_format({'bold': True, 'num_format': '#,##0'})
 
                 fmt_total = workbook.add_format({
@@ -1481,17 +1482,22 @@ def page():
                 for r, (_, row) in enumerate(df.iterrows(), start=1):
                     is_total = any(str(x).strip().upper() == "TOTAL" for x in row)
 
-                    # ranking untuk sheet summary
                     first = second = None
+
+                    # ===== SUMMARY RANKING (EXCLUDE ZERO) =====
                     if sheet in ["TCO Summary", "TCO Converted"]:
-                        numeric_vals = row[num_cols].dropna()
+                        numeric_vals = row[num_cols]
+                        numeric_vals = numeric_vals[
+                            (numeric_vals.notna()) & (numeric_vals != 0)
+                        ]
+
                         if not numeric_vals.empty:
                             sorted_vals = numeric_vals.sort_values()
                             first = sorted_vals.index[0]
                             if len(sorted_vals) > 1:
                                 second = sorted_vals.index[1]
 
-                    # ranking untuk bid & price
+                    # ===== BID & PRICE =====
                     if sheet == "Bid & Price Analysis":
                         first = row.get("1st Vendor")
                         second = row.get("2nd Vendor")
@@ -1499,13 +1505,19 @@ def page():
                     for c, col in enumerate(df.columns):
                         val = row[col]
 
+                        # ===== SAFETY =====
                         if pd.isna(val) or (isinstance(val, (int, float)) and np.isinf(val)):
                             worksheet.write(r, c, "")
                             continue
 
-                        # ===== PICK FORMAT =====
                         fmt = None
-                        if col == first:
+
+                        # ===== NO HIGHLIGHT FOR ZERO =====
+                        if isinstance(val, (int, float)) and val == 0:
+                            fmt = None
+
+                        # ===== PICK FORMAT =====
+                        elif col == first:
                             fmt = fmt_1b if is_total else fmt_1
                         elif col == second:
                             fmt = fmt_2b if is_total else fmt_2
@@ -1522,12 +1534,12 @@ def page():
                         else:
                             worksheet.write(r, c, val, fmt)
 
-                # ===== AUTOFIT =====
-                for i, col in enumerate(df.columns):
-                    worksheet.set_column(
-                        i, i,
-                        max(len(str(col)), df[col].astype(str).map(len).max()) + 2
-                    )
+                    # ===== AUTOFIT =====
+                    for i, col in enumerate(df.columns):
+                        worksheet.set_column(
+                            i, i,
+                            max(len(str(col)), df[col].astype(str).map(len).max()) + 2
+                        )
 
         output.seek(0)
         return output.getvalue()
