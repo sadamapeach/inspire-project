@@ -1531,7 +1531,6 @@ def page():
 
     # TCO per Regionn
     tab2.markdown("##### 💸 TCO Summary — Region")
-    tab2.caption(f"The following table presents the TCO summary across all regions.")
     
     # Hapus kolom & row "TOTAL"
     df = df_merge_transposed.drop(columns=["TOTAL"], errors="ignore").copy()
@@ -1581,14 +1580,31 @@ def page():
     df_tco_transposed_styled = (
         df_tco_transposed.style
         .format({col: format_rupiah for col in num_cols})
-        .apply(highlight_total_row_v2, axis=1)
+        .apply(highlight_total_row, axis=1)
+        .apply(lambda row: highlight_rank_summary(row, num_cols), axis=1)
+    )
+
+    tab2.markdown(
+        """
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+            <div style="font-size:0.88rem; color:gray; font-weight:400;">
+                The following table presents the TCO summary across all regions.
+            </div>
+            <div style="text-align:right;">
+                <span style="background:#C6EFCE; padding:2px 8px; border-radius:6px; font-weight:600; font-size: 0.75rem; color: black">1st Lowest</span>
+                &nbsp;
+                <span style="background:#FFEB9C; padding:2px 8px; border-radius:6px; font-weight:600; font-size: 0.75rem; color: black">2nd Lowest</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
     )
 
     st.session_state["df_tco_transposed_by_region"] = df_tco_transposed
     tab2.dataframe(df_tco_transposed_styled, hide_index=True)
 
     # Download button to Excel
-    excel_data = get_excel_download_highlight_total(df_tco_transposed)
+    excel_data = get_excel_download_highlight_summary(df_tco_transposed)
 
     with tab2:
         # Layout tombol (rata kanan)
@@ -1973,7 +1989,17 @@ def page():
                     - Large Gap Between 1st & 2nd Win Rate  
                         Shows clear market dominance by certain vendors.
                 ''')
-                st.dataframe(df_summary, hide_index=True)
+
+                num_cols = df_summary.select_dtypes(include=["number"]).columns
+                format_dict = {col: format_rupiah for col in num_cols}
+                format_dict.update({
+                    "1st Win Rate (%)": "{:.1f}%",
+                    "2nd Win Rate (%)": "{:.1f}%"
+                })
+
+                df_summary_styled = df_summary.style.format(format_dict)
+
+                st.dataframe(df_summary_styled, hide_index=True)
 
                 # Simpan hasil ke variabel
                 excel_data = get_excel_download(df_summary, sheet_name="Win Rate Trend Summary")
@@ -2125,78 +2151,122 @@ def page():
 
     # Fungsi "Super Button" & Formatting
     def generate_multi_sheet_excel_transposed(selected_sheets, df_dict):
-        """
-        Buat Excel multi-sheet dengan highlight:
-        - Sheet 'Bid & Price Analysis' -> highlight 1st & 2nd vendor
-        - Sheet lainnya -> highlight row TOTAL
-        """
         output = BytesIO()
 
         with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
             for sheet in selected_sheets:
-                df = df_dict[sheet].copy()
+                df = df_dict[sheet]
                 df.to_excel(writer, index=False, sheet_name=sheet)
+
                 workbook  = writer.book
                 worksheet = writer.sheets[sheet]
 
-                # --- Format umum ---
-                fmt_rupiah = workbook.add_format({'num_format': '#,##0'})
-                fmt_pct    = workbook.add_format({'num_format': '#,##0.0"%"'})
-                fmt_total  = workbook.add_format({
-                    "bold": True, "bg_color": "#D9EAD3", "font_color": "#1A5E20", "num_format": "#,##0"
+                # ===== FORMAT =====
+                fmt_rp   = workbook.add_format({'num_format': '#,##0'})
+                fmt_pct  = workbook.add_format({'num_format': '#,##0.0"%"'})
+                fmt_bold = workbook.add_format({'bold': True, 'num_format': '#,##0'})
+
+                fmt_total = workbook.add_format({
+                    'bold': True,
+                    'bg_color': '#D9EAD3',
+                    'font_color': '#1A5E20',
+                    'num_format': '#,##0'
                 })
-                fmt_first  = workbook.add_format({'bg_color': '#C6EFCE', "num_format": "#,##0"})
-                fmt_second = workbook.add_format({'bg_color': '#FFEB9C', "num_format": "#,##0"})
 
-                # Identifikasi numeric columns
-                numeric_cols = df.select_dtypes(include=["number"]).columns.tolist()
-                vendor_cols = [c for c in numeric_cols] if sheet == "Bid & Price Analysis Transposed" else []
+                fmt_1 = workbook.add_format({
+                    'bg_color': '#C6EFCE',
+                    'font_color': '#006100',
+                    'num_format': '#,##0'
+                })
 
-                # Apply format kolom numeric / persen
-                for col_idx, col_name in enumerate(df.columns):
-                    if col_name in numeric_cols:
-                        worksheet.set_column(col_idx, col_idx, 15, fmt_rupiah)
-                    if "%" in col_name:
-                        worksheet.set_column(col_idx, col_idx, 15, fmt_pct)
+                fmt_2 = workbook.add_format({
+                    'bg_color': '#FFEB9C',
+                    'font_color': '#9C6500',
+                    'num_format': '#,##0'
+                })
 
-                # --- Highlight baris ---
-                for row_idx, row in enumerate(df.itertuples(index=False), start=1):
-                    # Cek apakah TOTAL
-                    is_total_row = any(str(x).strip().upper() == "TOTAL" for x in row if pd.notna(x))
+                fmt_1b = workbook.add_format({
+                    'bg_color': '#C6EFCE',
+                    'font_color': '#006100',
+                    'bold': True,
+                    'num_format': '#,##0'
+                })
 
-                    # Ambil nama 1st & 2nd vendor untuk sheet Bid & Price Analysis Transposed
+                fmt_2b = workbook.add_format({
+                    'bg_color': '#FFEB9C',
+                    'font_color': '#9C6500',
+                    'bold': True,
+                    'num_format': '#,##0'
+                })
+
+                num_cols = df.select_dtypes(include=["number"]).columns.tolist()
+                pct_cols = [c for c in df.columns if "%" in c]
+
+                # ===== LOOP DATA =====
+                for r, (_, row) in enumerate(df.iterrows(), start=1):
+                    is_total = any(str(x).strip().upper() == "TOTAL" for x in row)
+
+                    first = second = None
+
+                    # ===== SUMMARY RANKING (EXCLUDE ZERO) =====
+                    if sheet == "TCO Summary Transposed":
+                        numeric_vals = row[num_cols]
+                        numeric_vals = numeric_vals[
+                            (numeric_vals.notna()) & (numeric_vals != 0)
+                        ]
+
+                        if not numeric_vals.empty:
+                            sorted_vals = numeric_vals.sort_values()
+                            first = sorted_vals.index[0]
+                            if len(sorted_vals) > 1:
+                                second = sorted_vals.index[1]
+
+                    # ===== BID & PRICE =====
                     if sheet == "Bid & Price Analysis Transposed":
-                        first_vendor_name = row[df.columns.get_loc("1st Vendor")]
-                        second_vendor_name = row[df.columns.get_loc("2nd Vendor")]
+                        first = row.get("1st Vendor")
+                        second = row.get("2nd Vendor")
 
-                        # Cari index kolom vendor di vendor_cols
-                        first_idx = df.columns.get_loc(first_vendor_name) if first_vendor_name in vendor_cols else None
-                        second_idx = df.columns.get_loc(second_vendor_name) if second_vendor_name in vendor_cols else None
+                    for c, col in enumerate(df.columns):
+                        val = row[col]
 
-                    # Loop tiap kolom
-                    for col_idx, col_name in enumerate(df.columns):
-                        value = row[col_idx]
+                        # ===== SAFETY =====
+                        if pd.isna(val) or (isinstance(val, (int, float)) and np.isinf(val)):
+                            worksheet.write(r, c, "")
+                            continue
+
                         fmt = None
 
-                        # Highlight TOTAL untuk sheet selain Bid & Price Analysis Transposed
-                        if is_total_row and sheet in ["Merge Transposed", "TCO Summary Transposed"]:
+                        # ===== NO HIGHLIGHT FOR ZERO =====
+                        if isinstance(val, (int, float)) and val == 0:
+                            fmt = None
+
+                        # ===== PICK FORMAT =====
+                        elif col == first:
+                            fmt = fmt_1b if is_total else fmt_1
+                        elif col == second:
+                            fmt = fmt_2b if is_total else fmt_2
+                        elif is_total and sheet == "Merge Transposed":
                             fmt = fmt_total
+                        elif is_total:
+                            fmt = fmt_bold
 
-                        # Highlight 1st/2nd vendor
-                        elif sheet == "Bid & Price Analysis Transposed":
-                            if first_idx is not None and col_idx == first_idx:
-                                fmt = fmt_first
-                            elif second_idx is not None and col_idx == second_idx:
-                                fmt = fmt_second
+                        # ===== WRITE CELL =====
+                        if col in pct_cols:
+                            worksheet.write_number(r, c, val, fmt or fmt_pct)
+                        elif col in num_cols:
+                            worksheet.write_number(r, c, val, fmt or fmt_rp)
+                        else:
+                            worksheet.write(r, c, val, fmt)
 
-                        # Tangani NaN / None / inf
-                        if pd.isna(value) or (isinstance(value, (int, float)) and np.isinf(value)):
-                            value = ""
-
-                        worksheet.write(row_idx, col_idx, value, fmt)
+                    # ===== AUTOFIT =====
+                    for i, col in enumerate(df.columns):
+                        worksheet.set_column(
+                            i, i,
+                            max(len(str(col)), df[col].astype(str).map(len).max()) + 2
+                        )
 
         output.seek(0)
-        return output
+        return output.getvalue()
 
     # --- FRAGMENT UNTUK BALLOONS ---
     @st.fragment
