@@ -160,77 +160,6 @@ def get_excel_download(df, sheet_name="Sheet1"):
     output.seek(0)
     return output.getvalue()
 
-# Download highlight total
-@st.cache_data
-def get_excel_download_highlight_total(df, sheet_name="Sheet1"):
-    output = BytesIO()
-
-    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-        df.to_excel(writer, index=False, sheet_name=sheet_name)
-        workbook  = writer.book
-        worksheet = writer.sheets[sheet_name]
-
-        # ================= FORMAT =================
-        format_rupiah = workbook.add_format({"num_format": "#,##0"})
-
-        highlight_format = workbook.add_format({
-            "bold": True,
-            "bg_color": "#D9EAD3",
-            "font_color": "#1A5E20",
-            "num_format": "#,##0"
-        })
-
-        # ================= NUMERIC COLUMNS =================
-        num_cols = df.select_dtypes(include=["number"]).columns
-
-        # ================= LOOP DATA =================
-        for row_idx, row in enumerate(df.itertuples(index=False), start=1):
-
-            is_total = any(
-                str(x).strip().upper() == "TOTAL"
-                for x in row if pd.notna(x)
-            )
-
-            for col_idx, col_name in enumerate(df.columns):
-                value = row[col_idx]
-
-                # NaN / inf safety
-                if pd.isna(value) or (isinstance(value, (int, float)) and np.isinf(value)):
-                    value = ""
-
-                # ===== TOTAL ROW =====
-                if is_total:
-                    if col_name in num_cols and value != "":
-                        worksheet.write_number(
-                            row_idx, col_idx, value, highlight_format
-                        )
-                    else:
-                        worksheet.write(
-                            row_idx, col_idx, value, highlight_format
-                        )
-
-                # ===== NORMAL ROW =====
-                else:
-                    if col_name in num_cols and value != "":
-                        worksheet.write_number(
-                            row_idx, col_idx, value, format_rupiah
-                        )
-                    else:
-                        worksheet.write(
-                            row_idx, col_idx, value
-                        )
-
-        # ================= AUTOFIT =================
-        for i, col in enumerate(df.columns):
-            max_len = max(
-                df[col].astype(str).map(len).max(),
-                len(str(col))
-            ) + 2
-            worksheet.set_column(i, i, max_len)
-
-    output.seek(0)
-    return output.getvalue()
-
 # Download Highlight Summary
 def get_excel_download_highlight_summary(df, sheet_name="Sheet1"):
     output = BytesIO()
@@ -1637,90 +1566,130 @@ def page():
 
     # Fungsi "Super Button" & Formatting
     def generate_multi_sheet_excel(selected_sheets, df_dict):
-        """
-        Gabungkan sheet dengan highlight khusus per sheet:
-        - Merge Data / Cost Summary: highlight TOTAL per year & TOTAL vendor
-        - Bid & Price Analysis: highlight 1st & 2nd vendor + TOTAL
-        - TCO sheets: highlight TOTAL
-        Semua akses baris pakai index, jadi aman untuk kolom dengan spasi/simbol.
-        """
         output = BytesIO()
 
         with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
             for sheet in selected_sheets:
-                df = df_dict[sheet].copy()
+                df = df_dict[sheet]
+                df.to_excel(writer, index=False, sheet_name=sheet)
+
                 workbook  = writer.book
-                worksheet = workbook.add_worksheet(sheet)
-                writer.sheets[sheet] = worksheet
+                worksheet = writer.sheets[sheet]
 
-                # --- Format umum ---
-                fmt_rupiah = workbook.add_format({'num_format': '#,##0'})
-                fmt_pct    = workbook.add_format({'num_format': '#,##0.0"%"'})
-                fmt_total  = workbook.add_format({'bold': True, 'bg_color': '#D9EAD3', 'font_color': '#1A5E20', 'num_format': '#,##0'})
-                fmt_first  = workbook.add_format({'bg_color': '#C6EFCE', "num_format": "#,##0"})
-                fmt_second = workbook.add_format({'bg_color': '#FFEB9C', "num_format": "#,##0"})
-                fmt_total_year  = workbook.add_format({'bold': True, 'bg_color': '#FFEB9C', 'font_color': '#1A1A1A', 'num_format': '#,##0'})
-                fmt_total_vendor  = workbook.add_format({'bold': True, 'bg_color': '#C6EFCE', 'font_color': '#1A5E20', 'num_format': '#,##0'})
+                # ================= FORMAT =================
+                fmt_rp   = workbook.add_format({'num_format': '#,##0'})
+                fmt_pct  = workbook.add_format({'num_format': '#,##0.0"%"'})
+                fmt_bold = workbook.add_format({'bold': True, 'num_format': '#,##0'})
 
-                # --- Tulis header ---
-                for col_idx, col_name in enumerate(df.columns):
-                    worksheet.write(0, col_idx, col_name)
+                # Merge / Cost Summary
+                fmt_total_year = workbook.add_format({
+                    'bold': True, 'bg_color': '#FFEB9C', 'font_color': '#9C6500', 'num_format': '#,##0'
+                })
+                fmt_total_vendor = workbook.add_format({
+                    'bold': True, 'bg_color': '#C6EFCE', 'font_color': '#006100', 'num_format': '#,##0'
+                })
 
-                numeric_cols = df.select_dtypes(include=["number"]).columns.tolist()
-                vendor_cols  = [c for c in numeric_cols] if sheet == "Bid & Price Analysis" else []
+                # Ranking
+                fmt_1  = workbook.add_format({'bg_color': '#C6EFCE', 'font_color': '#006100', 'num_format': '#,##0'})
+                fmt_2  = workbook.add_format({'bg_color': '#FFEB9C', 'font_color': '#9C6500', 'num_format': '#,##0'})
+                fmt_1b = workbook.add_format({'bg_color': '#C6EFCE', 'font_color': '#006100', 'bold': True, 'num_format': '#,##0'})
+                fmt_2b = workbook.add_format({'bg_color': '#FFEB9C', 'font_color': '#9C6500', 'bold': True, 'num_format': '#,##0'})
 
-                # Atur lebar kolom
-                for col_idx, col_name in enumerate(df.columns):
-                    if col_name in numeric_cols:
-                        worksheet.set_column(col_idx, col_idx, 15, fmt_rupiah)
-                    if "%" in col_name:
-                        worksheet.set_column(col_idx, col_idx, 15, fmt_pct)
+                num_cols = df.select_dtypes(include=["number"]).columns.tolist()
+                pct_cols = [c for c in df.columns if "%" in c]
 
-                # --- Tulis baris dengan highlight ---
-                for row_idx, row in enumerate(df.itertuples(index=False), start=1):
-                    fmt_row = [None]*len(df.columns)
+                # Cost Summary dynamic column
+                year_col  = next((c for c in df.columns if "YEAR" in c.upper()), None)
+                scope_col = next((c for c in df.columns if "SCOPE" in c.upper()), None)
+                year_idx  = df.columns.get_loc(year_col) if year_col else None
+                scope_idx = df.columns.get_loc(scope_col) if scope_col else None
 
-                    # --- Merge Data highlight ---
+                # ================= LOOP ROW =================
+                for r, (_, row) in enumerate(df.iterrows(), start=1):
+
+                    is_total = any(str(x).strip().upper() == "TOTAL" for x in row)
+                    row_fmt = None
+                    first = second = None
+
+                    # ---------- MERGE DATA ----------
                     if sheet == "Merge Data":
-                        year_val  = str(row[1]).upper()   # kolom Year
-                        scope_val = str(row[2]).upper()   # kolom Scope
-                        if scope_val == "TOTAL" and year_val != "TOTAL":
-                            fmt_row = [fmt_total_year]*len(df.columns)
-                        elif year_val == "TOTAL":
-                            fmt_row = [fmt_total_vendor]*len(df.columns)
+                        year_val  = str(row.iloc[1]).strip().upper()
+                        scope_val = str(row.iloc[2]).strip().upper()
 
-                    # --- Cost Summary highlight ---
+                        if scope_val == "TOTAL" and year_val != "TOTAL":
+                            row_fmt = fmt_total_year
+                        elif year_val == "TOTAL":
+                            row_fmt = fmt_total_vendor
+
+                    # ---------- COST SUMMARY ----------
                     elif sheet == "Cost Summary":
-                        year_val  = str(row[1]).upper()
-                        scope_val = str(row[3]).upper()
+                        year_val  = str(row.iloc[year_idx]).strip().upper() if year_idx is not None else ""
+                        scope_val = str(row.iloc[scope_idx]).strip().upper() if scope_idx is not None else ""
+
                         if scope_val == "TOTAL" and year_val != "TOTAL":
-                            fmt_row = [fmt_total_year]*len(df.columns)
+                            row_fmt = fmt_total_year
                         elif year_val == "TOTAL":
-                            fmt_row = [fmt_total_vendor]*len(df.columns)
+                            row_fmt = fmt_total_vendor
 
-                    # --- Bid & Price Analysis highlight ---
+                    # ---------- TCO SUMMARY ----------
+                    elif sheet in ["TCO Summary (Year)", "TCO Summary (Region)", "TCO Summary (Scope)"]:
+                        numeric_vals = row[num_cols]
+                        numeric_vals = numeric_vals[(numeric_vals.notna()) & (numeric_vals != 0)]
+
+                        if not numeric_vals.empty:
+                            sorted_vals = numeric_vals.sort_values()
+                            first = sorted_vals.index[0]
+                            if len(sorted_vals) > 1:
+                                second = sorted_vals.index[1]
+
+                    # ---------- BID & PRICE ----------
                     elif sheet == "Bid & Price Analysis":
-                        first_vendor_name  = row[df.columns.get_loc("1st Vendor")]
-                        second_vendor_name = row[df.columns.get_loc("2nd Vendor")]
-                        for col_idx2, col_name2 in enumerate(df.columns):
-                            if col_name2 == first_vendor_name:
-                                fmt_row[col_idx2] = fmt_first
-                            elif col_name2 == second_vendor_name:
-                                fmt_row[col_idx2] = fmt_second
-                            elif str(row[col_idx2]).upper() == "TOTAL":
-                                fmt_row[col_idx2] = fmt_total
+                        first = row.get("1st Vendor")
+                        second = row.get("2nd Vendor")
 
-                    # --- TCO sheets highlight TOTAL ---
-                    else:
-                        if any(str(row[i]).upper() == "TOTAL" for i in range(len(df.columns)) if row[i] is not None):
-                            fmt_row = [fmt_total]*len(df.columns)
+                    # ================= WRITE CELL =================
+                    for c, col in enumerate(df.columns):
+                        val = row[col]
 
-                    # --- Tulis sel ---
-                    for col_idx2 in range(len(df.columns)):
-                        value = row[col_idx2]
-                        if pd.isna(value) or (isinstance(value, (int,float)) and np.isinf(value)):
-                            value = ""
-                        worksheet.write(row_idx, col_idx2, value, fmt_row[col_idx2] if fmt_row[col_idx2] else None)
+                        if pd.isna(val) or (isinstance(val, (int, float)) and np.isinf(val)):
+                            worksheet.write(r, c, "")
+                            continue
+
+                        fmt = None
+                        is_zero = isinstance(val, (int, float)) and val == 0
+
+                        # --- ranking highlight ---
+                        if sheet in ["TCO Summary (Year)", "TCO Summary (Region)", "TCO Summary (Scope)"] and not is_zero:
+                            if col == first:
+                                fmt = fmt_1b if is_total else fmt_1
+                            elif col == second:
+                                fmt = fmt_2b if is_total else fmt_2
+
+                        # --- Bid & Price ---
+                        elif sheet == "Bid & Price Analysis":
+                            if col == first:
+                                fmt = fmt_1
+                            elif col == second:
+                                fmt = fmt_2
+
+                        # --- TOTAL text ---
+                        if is_total and fmt is None and row_fmt is None:
+                            fmt = fmt_bold
+
+                        # --- WRITE ---
+                        if col in pct_cols:
+                            worksheet.write_number(r, c, val, fmt or fmt_pct)
+                        elif col in num_cols:
+                            worksheet.write_number(r, c, val, fmt or (row_fmt or fmt_rp))
+                        else:
+                            worksheet.write(r, c, val, row_fmt or fmt)
+
+                # ================= AUTOFIT =================
+                for i, col in enumerate(df.columns):
+                    worksheet.set_column(
+                        i, i,
+                        max(len(str(col)), df[col].astype(str).map(len).max()) + 2
+                    )
 
         output.seek(0)
         return output.getvalue()
