@@ -1512,8 +1512,9 @@ def page():
 
                         fmt = None
 
-                        # ===== NO HIGHLIGHT FOR ZERO =====
-                        if isinstance(val, (int, float)) and val == 0:
+                        is_zero = isinstance(val, (int, float)) and val == 0
+                        # ===== NO HIGHLIGHT FOR ZERO (EXCEPT MERGE DATA) =====
+                        if is_zero and sheet != "Merge Data":
                             fmt = None
 
                         # ===== PICK FORMAT =====

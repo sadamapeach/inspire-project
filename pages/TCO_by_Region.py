@@ -1077,7 +1077,7 @@ def page():
                 st.dataframe(df_summary_styled, hide_index=True)
 
                 # Simpan hasil ke variabel
-                excel_data = get_excel_download(df_summary, sheet_name="Win Rate Trend Summary")
+                excel_data = get_excel_download(df_summary)
 
                 # Layout tombol (rata kanan)
                 col1, col2, col3 = st.columns([3,1,1])
@@ -1307,8 +1307,9 @@ def page():
 
                         fmt = None
 
-                        # ===== NO HIGHLIGHT FOR ZERO =====
-                        if isinstance(val, (int, float)) and val == 0:
+                        is_zero = isinstance(val, (int, float)) and val == 0
+                        # ===== NO HIGHLIGHT FOR ZERO (EXCEPT MERGE DATA) =====
+                        if is_zero and sheet != "Merge Data":
                             fmt = None
 
                         # ===== PICK FORMAT =====
@@ -2002,7 +2003,7 @@ def page():
                 st.dataframe(df_summary_styled, hide_index=True)
 
                 # Simpan hasil ke variabel
-                excel_data = get_excel_download(df_summary, sheet_name="Win Rate Trend Summary")
+                excel_data = get_excel_download(df_summary)
 
                 # Layout tombol (rata kanan)
                 col1, col2, col3 = st.columns([3,1,1])
@@ -2236,8 +2237,9 @@ def page():
 
                         fmt = None
 
-                        # ===== NO HIGHLIGHT FOR ZERO =====
-                        if isinstance(val, (int, float)) and val == 0:
+                        is_zero = isinstance(val, (int, float)) and val == 0
+                        # ===== NO HIGHLIGHT FOR ZERO (EXCEPT MERGE DATA) =====
+                        if is_zero and sheet != "Merge Transposed":
                             fmt = None
 
                         # ===== PICK FORMAT =====
