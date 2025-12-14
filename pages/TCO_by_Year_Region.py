@@ -344,102 +344,177 @@ def get_excel_download_highlight_summary(df, sheet_name="Sheet1"):
 @st.cache_data
 def get_excel_download_with_highlight(df, sheet_name="Sheet1"):
     output = BytesIO()
-    
-    # Buat file Excel dengan XlsxWriter
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
         df.to_excel(writer, index=False, sheet_name=sheet_name)
+
         workbook  = writer.book
         worksheet = writer.sheets[sheet_name]
 
-        # Format rupiah
-        format_rupiah_xls = workbook.add_format({'num_format': '#,##0'})
-        for col_num, col_name in enumerate(df.columns):
-            if col_name in df.select_dtypes(include=["number"]).columns:
-                worksheet.set_column(col_num, col_num, 15, format_rupiah_xls)
+        # ================= FORMAT =================
+        fmt_rupiah = workbook.add_format({"num_format": "#,##0"})
 
-        # --- Format untuk highlight --- 
-        total_year_format = workbook.add_format({
-            'bold': True, 
-            'bg_color': '#FFEB9C',  # kuning lembut
-            'font_color': '#1A1A1A',  # kuning agak gelap
-            "num_format": "#,##0"
-        })
-        vendor_total_format = workbook.add_format({
-            'bold': True, 
-            'bg_color': '#C6EFCE',  # hijau lembut
-            'font_color': '#1A5E20',  # hijau agak gelap
+        fmt_total_year = workbook.add_format({
+            "bold": True,
+            "bg_color": "#FFEB9C",   # kuning
+            "font_color": "#9C6500",
             "num_format": "#,##0"
         })
 
-        # --- Iterasi baris untuk highlight ---
-        for row_num, row in df.iterrows():
-            scope_val = str(row[df.columns[2]]).strip().upper()  # kolom Scope
-            year_val = str(row[df.columns[1]]).strip().upper()   # kolom Year
-            
+        fmt_vendor_total = workbook.add_format({
+            "bold": True,
+            "bg_color": "#C6EFCE",   # hijau
+            "font_color": "#006100",
+            "num_format": "#,##0"
+        })
+
+        fmt_text_bold = workbook.add_format({"bold": True})
+
+        # ================= COLUMN GROUP =================
+        num_cols = df.select_dtypes(include=["number"]).columns.tolist()
+
+        # ================= REWRITE CELLS =================
+        for row_idx, row in enumerate(df.itertuples(index=False), start=1):
+
+            scope_val = str(row[2]).strip().upper()  # kolom Scope
+            year_val  = str(row[1]).strip().upper()  # kolom Year
+
+            # Tentukan format baris
+            row_fmt = None
             if scope_val == "TOTAL" and year_val != "TOTAL":
-                fmt = total_year_format
+                row_fmt = fmt_total_year
             elif year_val == "TOTAL":
-                fmt = vendor_total_format
-            else:
-                continue
+                row_fmt = fmt_vendor_total
 
-            # Warnai hanya kolom yang berisi data
-            for col_num, value in enumerate(row):
-                worksheet.write(row_num + 1, col_num, value, fmt)
+            for col_idx, col_name in enumerate(df.columns):
+                val = row[col_idx]
 
+                # ===== SAFETY =====
+                if pd.isna(val) or (isinstance(val, (int, float)) and np.isinf(val)):
+                    worksheet.write(row_idx, col_idx, "")
+                    continue
+
+                # ===== NUMERIC COLUMN =====
+                if col_name in num_cols:
+                    worksheet.write_number(
+                        row_idx,
+                        col_idx,
+                        val,
+                        row_fmt or fmt_rupiah
+                    )
+
+                # ===== TEXT COLUMN =====
+                else:
+                    worksheet.write(
+                        row_idx,
+                        col_idx,
+                        val,
+                        row_fmt if row_fmt else None
+                    )
+
+        # ================= AUTOFIT =================
+        for i, col in enumerate(df.columns):
+            max_len = max(
+                df[col].astype(str).map(len).max(),
+                len(str(col))
+            ) + 2
+            worksheet.set_column(i, i, max_len)
+
+    output.seek(0)
     return output.getvalue()
 
 # Download highlight total ver2 (kuning + hijau) -> df_cost_summary
 @st.cache_data
 def get_excel_download_with_highlight_v2(df, sheet_name="Sheet1"):
     output = BytesIO()
-    
-    # Buat file Excel dengan XlsxWriter
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
         df.to_excel(writer, index=False, sheet_name=sheet_name)
+
         workbook  = writer.book
         worksheet = writer.sheets[sheet_name]
 
-        # Format rupiah
-        format_rupiah_xls = workbook.add_format({'num_format': '#,##0'})
-        for col_num, col_name in enumerate(df.columns):
-            if col_name in df.select_dtypes(include=["number"]).columns:
-                worksheet.set_column(col_num, col_num, 15, format_rupiah_xls)
+        # ================= FORMAT =================
+        fmt_rupiah = workbook.add_format({"num_format": "#,##0"})
 
-        # --- Format untuk highlight ---
-        total_year_format = workbook.add_format({
-            'bold': True, 
-            'bg_color': '#FFEB9C',  # kuning lembut
-            'font_color': '#1A1A1A',  # teks agak gelap
-            "num_format": "#,##0"
-        })
-        vendor_total_format = workbook.add_format({
-            'bold': True, 
-            'bg_color': '#C6EFCE',  # hijau lembut
-            'font_color': '#1A5E20',  # teks hijau tua
+        fmt_total_year = workbook.add_format({
+            "bold": True,
+            "bg_color": "#FFEB9C",   # kuning
+            "font_color": "#9C6500",
             "num_format": "#,##0"
         })
 
-        # --- Deteksi nama kolom dinamis ---
+        fmt_vendor_total = workbook.add_format({
+            "bold": True,
+            "bg_color": "#C6EFCE",   # hijau
+            "font_color": "#006100",
+            "num_format": "#,##0"
+        })
+
+        # ================= COLUMN GROUP =================
+        num_cols = df.select_dtypes(include=["number"]).columns.tolist()
+
+        # Deteksi kolom dinamis
         year_col = next((c for c in df.columns if "YEAR" in c.upper()), None)
         scope_col = next((c for c in df.columns if "SCOPE" in c.upper()), None)
 
-        # --- Iterasi baris untuk highlight ---
-        for row_num, row in df.iterrows():
-            year_val = str(row[year_col]).strip().upper() if year_col else ""
-            scope_val = str(row[scope_col]).strip().upper() if scope_col else ""
-            
+        year_idx = df.columns.get_loc(year_col) if year_col else None
+        scope_idx = df.columns.get_loc(scope_col) if scope_col else None
+
+        # ================= REWRITE CELLS =================
+        for row_idx, row in enumerate(df.itertuples(index=False), start=1):
+
+            year_val = (
+                str(row[year_idx]).strip().upper()
+                if year_idx is not None else ""
+            )
+            scope_val = (
+                str(row[scope_idx]).strip().upper()
+                if scope_idx is not None else ""
+            )
+
+            # Tentukan format baris
+            row_fmt = None
             if scope_val == "TOTAL" and year_val != "TOTAL":
-                fmt = total_year_format
+                row_fmt = fmt_total_year
             elif year_val == "TOTAL":
-                fmt = vendor_total_format
-            else:
-                continue
+                row_fmt = fmt_vendor_total
 
-            # Warnai hanya kolom berisi data
-            for col_num, value in enumerate(row):
-                worksheet.write(row_num + 1, col_num, value, fmt)
+            for col_idx, col_name in enumerate(df.columns):
+                val = row[col_idx]
 
+                # ===== SAFETY =====
+                if pd.isna(val) or (isinstance(val, (int, float)) and np.isinf(val)):
+                    worksheet.write(row_idx, col_idx, "")
+                    continue
+
+                # ===== NUMERIC COLUMN =====
+                if col_name in num_cols:
+                    worksheet.write_number(
+                        row_idx,
+                        col_idx,
+                        val,
+                        row_fmt or fmt_rupiah
+                    )
+
+                # ===== TEXT COLUMN =====
+                else:
+                    worksheet.write(
+                        row_idx,
+                        col_idx,
+                        val,
+                        row_fmt
+                    )
+
+        # ================= AUTOFIT =================
+        for i, col in enumerate(df.columns):
+            max_len = max(
+                df[col].astype(str).map(len).max(),
+                len(str(col))
+            ) + 2
+            worksheet.set_column(i, i, max_len)
+
+    output.seek(0)
     return output.getvalue()
 
 # Download Highlight Excel
