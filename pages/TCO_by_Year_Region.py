@@ -69,26 +69,87 @@ def highlight_1st_2nd_vendor(row, columns):
             styles[i] = "background-color: #FFEB9C; color: #9C6500;"
     return styles
 
+def highlight_rank_summary(row, num_cols):
+    styles = [""] * len(row)
+
+    # Ambil nilai numeric vendor
+    numeric_vals = row[num_cols]
+
+    # EXCLUDE nilai 0 (vendor tidak ikut tender)
+    numeric_vals = numeric_vals[numeric_vals != 0]
+
+    # Skip jika kosong / NaN semua
+    if numeric_vals.dropna().empty:
+        return styles
+
+    # Sort numeric values
+    sorted_vals = numeric_vals.sort_values()
+
+    # Determine 1st & 2nd rank
+    first_vendor = sorted_vals.index[0]
+    second_vendor = sorted_vals.index[1] if len(sorted_vals) > 1 else None
+
+    # Apply styles
+    for i, col in enumerate(row.index):
+        if col == first_vendor:
+            styles[i] = "background-color: #C6EFCE; color: #006100;"
+        elif second_vendor and col == second_vendor:
+            styles[i] = "background-color: #FFEB9C; color: #9C6500;"
+
+    return styles
+
 # Download button to Excel
 @st.cache_data
 def get_excel_download(df, sheet_name="Sheet1"):
     output = BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
         df.to_excel(writer, index=False, sheet_name=sheet_name)
-        workbook = writer.book
+
+        workbook  = writer.book
         worksheet = writer.sheets[sheet_name]
 
-        # --- Format untuk baris TOTAL ---
-        bold_format = workbook.add_format({'bold': True})
+        # ================= FORMAT =================
+        fmt_rupiah = workbook.add_format({"num_format": "#,##0"})
+        fmt_pct = workbook.add_format({"num_format": '#,##0.0"%"'})
 
-        # Cari baris dengan label 'TOTAL' di kolom pertama
-        total_rows = df.index[df.iloc[:, 0].astype(str).str.upper() == "TOTAL"].tolist()
+        # ================= COLUMN GROUP =================
+        num_cols = df.select_dtypes(include=["number"]).columns.tolist()
+        pct_cols = [c for c in df.columns if "%" in c]
 
-        # Terapkan bold ke seluruh baris yang mengandung "TOTAL"
-        for row in total_rows:
-            worksheet.set_row(row + 1, None, bold_format)  # +1 karena header Excel mulai dari baris 1
+        # ================= REWRITE CELLS =================
+        for row_idx, row in enumerate(df.itertuples(index=False), start=1):
+            for col_idx, col_name in enumerate(df.columns):
+                val = row[col_idx]
 
-        # (Opsional) Autofit kolom agar rapih
+                # Safety NaN / inf
+                if pd.isna(val) or (isinstance(val, (int, float)) and np.isinf(val)):
+                    worksheet.write(row_idx, col_idx, "")
+                    continue
+
+                # ===== PERCENT COLUMN =====
+                if col_name in pct_cols:
+                    worksheet.write_number(
+                        row_idx,
+                        col_idx,
+                        val,
+                        fmt_pct
+                    )
+
+                # ===== NUMERIC COLUMN =====
+                elif col_name in num_cols:
+                    worksheet.write_number(
+                        row_idx,
+                        col_idx,
+                        val,
+                        fmt_rupiah
+                    )
+
+                # ===== TEXT COLUMN =====
+                else:
+                    worksheet.write(row_idx, col_idx, val)
+
+        # ================= AUTOFIT =================
         for i, col in enumerate(df.columns):
             max_len = max(
                 df[col].astype(str).map(len).max(),
@@ -104,40 +165,182 @@ def get_excel_download(df, sheet_name="Sheet1"):
 def get_excel_download_highlight_total(df, sheet_name="Sheet1"):
     output = BytesIO()
 
-    # Buat file Excel dengan XlsxWriter
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
         df.to_excel(writer, index=False, sheet_name=sheet_name)
-        workbook = writer.book
+        workbook  = writer.book
         worksheet = writer.sheets[sheet_name]
 
-        # Tentukan format
-        format_rupiah_xls = workbook.add_format({'num_format': '#,##0'})
-        fmt_pct_rupiah   = workbook.add_format({'num_format': '#,##0.0"%"'})
+        # ================= FORMAT =================
+        format_rupiah = workbook.add_format({"num_format": "#,##0"})
+
         highlight_format = workbook.add_format({
             "bold": True,
-            "bg_color": "#D9EAD3",  # hijau lembut
-            "font_color": "#1A5E20",  # hijau tua
+            "bg_color": "#D9EAD3",
+            "font_color": "#1A5E20",
             "num_format": "#,##0"
         })
 
-        # Terapkan format
-        for col_num, col_name in enumerate(df.columns):
-            if col_name in df.select_dtypes(include=["number"]).columns:
-                worksheet.set_column(col_num, col_num, 15, format_rupiah_xls)       
+        # ================= NUMERIC COLUMNS =================
+        num_cols = df.select_dtypes(include=["number"]).columns
 
-        # Jumlah kolom data
-        num_cols = len(df.columns)
+        # ================= LOOP DATA =================
+        for row_idx, row in enumerate(df.itertuples(index=False), start=1):
 
-        # Iterasi baris (mulai dari baris 1 karena header di baris 0)
-        for row_num, row_data in enumerate(df.itertuples(index=False), start=1):
-            if any(str(x).strip().upper() == "TOTAL" for x in row_data if pd.notna(x)):
-                # Highlight hanya sel di kolom yang berisi data
-                for col_num in range(num_cols):
-                    worksheet.write(row_num, col_num, row_data[col_num], highlight_format)
+            is_total = any(
+                str(x).strip().upper() == "TOTAL"
+                for x in row if pd.notna(x)
+            )
 
+            for col_idx, col_name in enumerate(df.columns):
+                value = row[col_idx]
+
+                # NaN / inf safety
+                if pd.isna(value) or (isinstance(value, (int, float)) and np.isinf(value)):
+                    value = ""
+
+                # ===== TOTAL ROW =====
+                if is_total:
+                    if col_name in num_cols and value != "":
+                        worksheet.write_number(
+                            row_idx, col_idx, value, highlight_format
+                        )
+                    else:
+                        worksheet.write(
+                            row_idx, col_idx, value, highlight_format
+                        )
+
+                # ===== NORMAL ROW =====
+                else:
+                    if col_name in num_cols and value != "":
+                        worksheet.write_number(
+                            row_idx, col_idx, value, format_rupiah
+                        )
+                    else:
+                        worksheet.write(
+                            row_idx, col_idx, value
+                        )
+
+        # ================= AUTOFIT =================
+        for i, col in enumerate(df.columns):
+            max_len = max(
+                df[col].astype(str).map(len).max(),
+                len(str(col))
+            ) + 2
+            worksheet.set_column(i, i, max_len)
+
+    output.seek(0)
     return output.getvalue()
 
-# Download highlight total
+# Download Highlight Summary
+def get_excel_download_highlight_summary(df, sheet_name="Sheet1"):
+    output = BytesIO()
+
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        df.to_excel(writer, index=False, sheet_name=sheet_name)
+
+        workbook  = writer.book
+        worksheet = writer.sheets[sheet_name]
+
+        # ================= FORMAT =================
+        format_rupiah = workbook.add_format({"num_format": "#,##0"})
+        format_bold = workbook.add_format({"bold": True})
+
+        format_bold_rupiah = workbook.add_format({
+            "bold": True,
+            "num_format": "#,##0"
+        })
+
+        format_first = workbook.add_format({
+            "bg_color": "#C6EFCE",
+            "font_color": "#006100",
+            "num_format": "#,##0"
+        })
+
+        format_second = workbook.add_format({
+            "bg_color": "#FFEB9C",
+            "font_color": "#9C6500",
+            "num_format": "#,##0"
+        })
+
+        format_first_bold = workbook.add_format({
+            "bg_color": "#C6EFCE",
+            "font_color": "#006100",
+            "bold": True,
+            "num_format": "#,##0"
+        })
+
+        format_second_bold = workbook.add_format({
+            "bg_color": "#FFEB9C",
+            "font_color": "#9C6500",
+            "bold": True,
+            "num_format": "#,##0"
+        })
+
+        # ================= NUMERIC COLUMNS =================
+        num_cols = df.select_dtypes(include=["number"]).columns
+
+        # ================= LOOP DATA =================
+        for row_idx, (_, row) in enumerate(df.iterrows(), start=1):
+
+            is_total = any(str(x).strip().upper() == "TOTAL" for x in row)
+
+            # ===== RANKING (EXCLUDE 0) =====
+            numeric_vals = row[num_cols].dropna()
+            numeric_vals = numeric_vals[numeric_vals != 0]
+
+            first_vendor, second_vendor = None, None
+            if not numeric_vals.empty:
+                sorted_vals = numeric_vals.sort_values()
+                first_vendor = sorted_vals.index[0]
+                if len(sorted_vals) > 1:
+                    second_vendor = sorted_vals.index[1]
+
+            # ===== WRITE CELL =====
+            for col_idx, col in enumerate(df.columns):
+                value = row[col]
+
+                if pd.isna(value) or (isinstance(value, (int, float)) and np.isinf(value)):
+                    value = ""
+
+                fmt = None
+
+                # ----- NO HIGHLIGHT FOR ZERO -----
+                if value == 0:
+                    fmt = None
+
+                else:
+                    if col == first_vendor:
+                        fmt = format_first_bold if is_total else format_first
+                    elif col == second_vendor:
+                        fmt = format_second_bold if is_total else format_second
+
+                # ----- WRITE -----
+                if col in num_cols and value != "":
+                    worksheet.write_number(
+                        row_idx,
+                        col_idx,
+                        value,
+                        fmt or (format_bold_rupiah if is_total else format_rupiah)
+                    )
+                else:
+                    worksheet.write(
+                        row_idx,
+                        col_idx,
+                        value,
+                        format_bold if is_total else None
+                    )
+
+        # ================= AUTOFIT =================
+        for i, col in enumerate(df.columns):
+            worksheet.set_column(
+                i, i,
+                max(len(str(col)), df[col].astype(str).map(len).max()) + 2
+            )
+
+    output.seek(0)
+    return output.getvalue()
+
+# Download highlight total (kuning + hijau) -> df_merge
 @st.cache_data
 def get_excel_download_with_highlight(df, sheet_name="Sheet1"):
     output = BytesIO()
@@ -186,7 +389,7 @@ def get_excel_download_with_highlight(df, sheet_name="Sheet1"):
 
     return output.getvalue()
 
-# Download highlight total ver2
+# Download highlight total ver2 (kuning + hijau) -> df_cost_summary
 @st.cache_data
 def get_excel_download_with_highlight_v2(df, sheet_name="Sheet1"):
     output = BytesIO()
@@ -242,48 +445,81 @@ def get_excel_download_with_highlight_v2(df, sheet_name="Sheet1"):
 # Download Highlight Excel
 def get_excel_download_highlight_1st_2nd_lowest(df, sheet_name="Sheet1"):
     output = BytesIO()
+
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
         df.to_excel(writer, index=False, sheet_name=sheet_name)
-        workbook = writer.book
+        workbook  = writer.book
         worksheet = writer.sheets[sheet_name]
 
-        # Tentukan format
+        # ========== FORMAT ==========
         format_rupiah_xls = workbook.add_format({'num_format': '#,##0'})
-        fmt_pct_rupiah   = workbook.add_format({'num_format': '#,##0.0"%"'})
+        fmt_pct_rupiah = workbook.add_format({'num_format': '#,##0.0"%"'})
 
-        # Terapkan format
-        for col_num, col_name in enumerate(df.columns):
-            if col_name in df.select_dtypes(include=["number"]).columns:
-                worksheet.set_column(col_num, col_num, 15, format_rupiah_xls)
+        format_first = workbook.add_format({
+            'bg_color': '#C6EFCE',
+            'font_color': '#006100',
+            'num_format': '#,##0'
+        })
 
-            if "%" in col_name:
-                worksheet.set_column(col_num, col_num, 15, fmt_pct_rupiah)
+        format_second = workbook.add_format({
+            'bg_color': '#FFEB9C',
+            'font_color': '#9C6500',
+            'num_format': '#,##0'
+        })
 
-        # --- Format umum ---
-        format_first = workbook.add_format({'bg_color': '#C6EFCE', "num_format": "#,##0"})  # hijau Excel-style
-        format_second = workbook.add_format({'bg_color': '#FFEB9C', "num_format": "#,##0"}) # kuning Excel-style
+        # ========== COLUMN GROUP ==========
+        num_cols = df.select_dtypes(include=["number"]).columns
+        pct_cols = [c for c in df.columns if "%" in c]
 
-        # --- Loop baris dan kolom ---
+        # ========== LOOP DATA ==========
         for row_idx, (_, row) in enumerate(df.iterrows(), start=1):
-            first_vendor = row.get("1st Vendor")
+            first_vendor  = row.get("1st Vendor")
             second_vendor = row.get("2nd Vendor")
 
             for col_idx, col in enumerate(df.columns):
                 value = row[col]
-                fmt = None
 
-                # Tentukan warna highlight
+                # NaN / inf safety
+                if pd.isna(value) or (isinstance(value, (int, float)) and np.isinf(value)):
+                    worksheet.write(row_idx, col_idx, "")
+                    continue
+
+                # ===== PICK FORMAT =====
+                fmt = None
                 if col == first_vendor:
                     fmt = format_first
                 elif col == second_vendor:
                     fmt = format_second
 
-                # Handle semua jenis data NaN, inf, dan None
-                if pd.isna(value) or (isinstance(value, (int, float)) and np.isinf(value)):
-                    value = ""
+                # ===== WRITE CELL =====
+                if col in pct_cols:
+                    worksheet.write_number(
+                        row_idx,
+                        col_idx,
+                        value,
+                        fmt or fmt_pct_rupiah
+                    )
 
-                worksheet.write(row_idx, col_idx, value, fmt)
+                elif col in num_cols:
+                    worksheet.write_number(
+                        row_idx,
+                        col_idx,
+                        value,
+                        fmt or format_rupiah_xls
+                    )
 
+                else:
+                    worksheet.write(row_idx, col_idx, value)
+
+        # ================= AUTOFIT =================
+        for i, col in enumerate(df.columns):
+            max_len = max(
+                df[col].astype(str).map(len).max(),
+                len(str(col))
+            ) + 2
+            worksheet.set_column(i, i, max_len)
+
+    output.seek(0)
     return output.getvalue()
 
 def page():
@@ -616,19 +852,37 @@ def page():
     })
     tco_year = pd.concat([tco_year, total_row], ignore_index=True)
 
+    num_cols_year = tco_year.select_dtypes(include=["number"]).columns
+
     # Format rupiah, exclude kolom pertama (YEAR)
     format_dict = {col: format_rupiah for col in tco_year.columns[1:]}  # skip kolom pertama
 
     tco_year_styled = (
         tco_year.style
         .format(format_dict)  # hanya format kolom numeric
-        .apply(highlight_total_row_v2, axis=1)
+        .apply(highlight_total_row, axis=1)
+        .apply(lambda row: highlight_rank_summary(row, num_cols_year), axis=1)
     )
 
-    tab1.caption("Overview of total vendor costs per year, highlighting annual spending trends and competitiveness.")
+    tab1.markdown(
+        """
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+            <div style="font-size:0.88rem; color:gray; font-weight:400;">
+                Overview of total vendor costs per year.
+            </div>
+            <div style="text-align:right;">
+                <span style="background:#C6EFCE; padding:2px 8px; border-radius:6px; font-weight:600; font-size: 0.75rem; color: black">1st Lowest</span>
+                &nbsp;
+                <span style="background:#FFEB9C; padding:2px 8px; border-radius:6px; font-weight:600; font-size: 0.75rem; color: black">2nd Lowest</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
     tab1.dataframe(tco_year_styled, hide_index=True)
 
-    excel_data = get_excel_download_highlight_total(tco_year)
+    excel_data = get_excel_download_highlight_summary(tco_year)
     with tab1:
         col1, col2, col3 = st.columns([2.3,2,1])
         with col3:
@@ -665,16 +919,34 @@ def page():
 
     tco_region = pd.concat([tco_region, total_row], ignore_index=True)
 
+    num_cols_region = tco_region.select_dtypes(include=["number"]).columns
+
     tco_region_styled = (
         tco_region.style
         .format(format_rupiah)
-        .apply(highlight_total_row_v2, axis=1)
+        .apply(highlight_total_row, axis=1)
+        .apply(lambda row: highlight_rank_summary(row, num_cols_region), axis=1)
     )
 
-    tab2.caption("Breakdown of vendor costs across regions, showing geographical spending distribution and variations.")
+    tab2.markdown(
+        """
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+            <div style="font-size:0.88rem; color:gray; font-weight:400;">
+                Breakdown of vendor costs across regions.
+            </div>
+            <div style="text-align:right;">
+                <span style="background:#C6EFCE; padding:2px 8px; border-radius:6px; font-weight:600; font-size: 0.75rem; color: black">1st Lowest</span>
+                &nbsp;
+                <span style="background:#FFEB9C; padding:2px 8px; border-radius:6px; font-weight:600; font-size: 0.75rem; color: black">2nd Lowest</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
     tab2.dataframe(tco_region_styled, hide_index=True)
 
-    excel_data = get_excel_download_highlight_total(tco_region)
+    excel_data = get_excel_download_highlight_summary(tco_region)
     with tab2:
         col1, col2, col3 = st.columns([2.3,2,1])
         with col3:
@@ -708,16 +980,34 @@ def page():
 
     tco_scope = pd.concat([tco_scope, total_row], ignore_index=True)
 
+    num_cols_scope = tco_scope.select_dtypes(include=["number"]).columns
+
     tco_scope_styled = (
         tco_scope.style
         .format(format_rupiah)
-        .apply(highlight_total_row_v2, axis=1)
+        .apply(highlight_total_row, axis=1)
+        .apply(lambda row: highlight_rank_summary(row, num_cols_scope), axis=1)
     )
 
-    tab3.caption("Summary of vendor costs by project scope, providing insight into allocation across different work packages.")
+    tab3.markdown(
+        """
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+            <div style="font-size:0.88rem; color:gray; font-weight:400;">
+                Summary of vendor costs by project scope.
+            </div>
+            <div style="text-align:right;">
+                <span style="background:#C6EFCE; padding:2px 8px; border-radius:6px; font-weight:600; font-size: 0.75rem; color: black">1st Lowest</span>
+                &nbsp;
+                <span style="background:#FFEB9C; padding:2px 8px; border-radius:6px; font-weight:600; font-size: 0.75rem; color: black">2nd Lowest</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
     tab3.dataframe(tco_scope_styled, hide_index=True)
 
-    excel_data = get_excel_download_highlight_total(tco_scope)
+    excel_data = get_excel_download_highlight_summary(tco_scope)
     with tab3:
         col1, col2, col3 = st.columns([2.3,2,1])
         with col3:
@@ -1113,10 +1403,19 @@ def page():
                 - Large Gap Between 1st & 2nd Win Rate  
                     Shows clear market dominance by certain vendors.
             ''')
-            st.dataframe(df_summary_chart, hide_index=True)
+
+            num_cols = df_summary_chart.select_dtypes(include=["number"]).columns
+            format_dict = {col: format_rupiah for col in num_cols}
+            format_dict.update({
+                "1st Win Rate (%)": "{:.1f}%",
+                "2nd Win Rate (%)": "{:.1f}%"
+            })
+
+            df_summary_chart_styled = df_summary_chart.style.format(format_dict)
+            st.dataframe(df_summary_chart_styled, hide_index=True)
 
             # Simpan hasil ke variabel
-            excel_data = get_excel_download(df_summary_chart, sheet_name="Win Rate Trend Summary")
+            excel_data = get_excel_download(df_summary_chart)
 
             # Layout tombol (rata kanan)
             col1, col2, col3 = st.columns([3,1,1])
