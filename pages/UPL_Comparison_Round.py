@@ -468,19 +468,26 @@ def page():
  
     # Pre-processing
     def clean_dataframe(df):
+        rows_before, cols_before = df.shape
+
         # Data cleaning
-        df_clean = df.replace(r'^\s*$', None, regex=True)
+        df_clean = df.replace(r'^\s*$', np.nan, regex=True)
         df_clean = df_clean.dropna(how="all", axis=0).dropna(how="all", axis=1)
 
-        # Data cleaning ver.2
-        df_clean = df.replace(r'^\s*$', np.nan, regex=True)
-        df_clean = df_clean.loc[:, ~df_clean.columns.str.contains("^Unnamed")]
-        df_clean = df_clean.dropna(how="all")
+        # Header handling logic
+        cols = df_clean.columns.astype(str)
 
-        # Jika header "Unnamed" -> set row 0 as header
-        if any("Unnamed" in str(c) for c in df_clean.columns):
+        # Case 1: Semua kolom 'Unnamed'
+        if len(cols) > 0 and all(col.startswith("Unnamed") for col in cols):
+            # Gunakan baris pertama sebagai header
             df_clean.columns = df_clean.iloc[0]
             df_clean = df_clean[1:].reset_index(drop=True)
+
+        # Case 2: Hanya beberapa kolom yang 'Unnamed'
+        else:
+            df_clean = df_clean.loc[:, ~cols.str.startswith("Unnamed")]
+
+        rows_after, cols_after = df_clean.shape
 
         # Konversi tipe data
         df_clean = df_clean.convert_dtypes()
