@@ -51,52 +51,67 @@ def highlight_min_cell(row):
         else:
             styles.append("")
     return styles
-
-def safe_write(ws, row, col, val, fmt=None):
-    if val is None:
-        ws.write(row, col, "", fmt)
-        return
-    
-    if isinstance(val, float) and (math.isnan(val) or math.isinf(val)):
-        ws.write(row, col, "", fmt)
-        return
-
-    ws.write(row, col, val, fmt)
     
 # Download button to Excel
 @st.cache_data
 def get_excel_download(df, sheet_name="Sheet1"):
     output = BytesIO()
 
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
         df.to_excel(writer, index=False, sheet_name=sheet_name)
+
         workbook  = writer.book
         worksheet = writer.sheets[sheet_name]
 
-        # FORMAT
-        fmt_number = workbook.add_format({'num_format': '#,##0'})
-        fmt_pct_rupiah   = workbook.add_format({'num_format': '#,##0.0"%"'})
-        fmt_bold   = workbook.add_format({'bold': True})
+        # ================= FORMAT =================
+        fmt_rupiah = workbook.add_format({"num_format": "#,##0"})
+        fmt_pct = workbook.add_format({"num_format": '#,##0.0"%"'})
 
-        # DETEKSI NUMERIC COLUMNS
-        numeric_cols = df.select_dtypes(include=["number"]).columns
+        # ================= COLUMN GROUP =================
+        num_cols = df.select_dtypes(include=["number"]).columns.tolist()
+        pct_cols = [c for c in df.columns if "%" in c]
 
-        # APPLY FORMAT COLUMN-BY-COLUMN
-        for col_idx, col_name in enumerate(df.columns):
+        # ================= REWRITE CELLS =================
+        for row_idx, row in enumerate(df.itertuples(index=False), start=1):
+            for col_idx, col_name in enumerate(df.columns):
+                val = row[col_idx]
 
-            # Percentage columns by name
-            if "%" in col_name.upper():
-                worksheet.set_column(col_idx, col_idx, 15, fmt_pct_rupiah)
+                # Safety NaN / inf
+                if pd.isna(val) or (isinstance(val, (int, float)) and np.isinf(val)):
+                    worksheet.write(row_idx, col_idx, "")
+                    continue
 
-            # Numeric columns
-            elif col_name in numeric_cols:
-                worksheet.set_column(col_idx, col_idx, 15, fmt_number)
+                # ===== PERCENT COLUMN =====
+                if col_name in pct_cols:
+                    worksheet.write_number(
+                        row_idx,
+                        col_idx,
+                        val,
+                        fmt_pct
+                    )
 
-        # --- BOLD ROW "TOTAL" ---
-        total_rows = df.index[df.iloc[:, 0].astype(str).str.upper() == "TOTAL"].tolist()
-        for r in total_rows:
-            worksheet.set_row(r + 1, None, fmt_bold)
+                # ===== NUMERIC COLUMN =====
+                elif col_name in num_cols:
+                    worksheet.write_number(
+                        row_idx,
+                        col_idx,
+                        val,
+                        fmt_rupiah
+                    )
 
+                # ===== TEXT COLUMN =====
+                else:
+                    worksheet.write(row_idx, col_idx, val)
+
+        # ================= AUTOFIT =================
+        for i, col in enumerate(df.columns):
+            max_len = max(
+                df[col].astype(str).map(len).max(),
+                len(str(col))
+            ) + 2
+            worksheet.set_column(i, i, max_len)
+
+    output.seek(0)
     return output.getvalue()
 
 # Download highlight total
@@ -104,49 +119,70 @@ def get_excel_download(df, sheet_name="Sheet1"):
 def get_excel_download_highlight(df, sheet_name="Sheet1"):
     output = BytesIO()
 
-    # Buat salinan untuk di-export dan deteksi kolom numeric
+    # ===== COPY & COERCE NUMERIC =====
     df_to_write = df.copy()
-
     numeric_cols = []
+
     for col in df_to_write.columns:
-        # Coerce ke numeric — angka valid tetap, non-angka -> NaN
         coerced = pd.to_numeric(df_to_write[col], errors="coerce")
         if coerced.notna().any():
-            numeric_cols.append(col)
             df_to_write[col] = coerced
+            numeric_cols.append(col)
 
-    # Buat file Excel dengan XlsxWriter
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
         df_to_write.to_excel(writer, index=False, sheet_name=sheet_name)
-        workbook = writer.book
+        workbook  = writer.book
         worksheet = writer.sheets[sheet_name]
 
-        # Format kolom numeric sebagai persen
+        # ===== FORMAT =====
         fmt_pct = workbook.add_format({'num_format': '#,##0.0"%"'})
-        # Format highlight untuk min value
-        highlight_format = workbook.add_format({
+
+        fmt_min = workbook.add_format({
             "bold": True,
-            "bg_color": "#D9EAD3",  # hijau lembut
+            "bg_color": "#D9EAD3",
             "font_color": "#1A5E20",
-            "num_format": '#,##0.0"%"'  # persen
+            'num_format': '#,##0.0"%"'
         })
 
-        # Terapkan format kolom numeric
-        for col_idx, col_name in enumerate(df_to_write.columns):
-            if col_name in numeric_cols:
-                worksheet.set_column(col_idx, col_idx, 15, fmt_pct)
+        # ===== COLUMN WIDTH =====
+        for col_idx in range(len(df_to_write.columns)):
+            worksheet.set_column(col_idx, col_idx, 15)
 
-        # Iterasi row untuk highlight min value per row
+        # ===== LOOP ALL CELLS =====
         for row_idx, row in enumerate(df_to_write.itertuples(index=False), start=1):
-            # Ambil hanya nilai numerik yang valid (exclude NaN)
-            numeric_vals = [(i, val) for i, val in enumerate(row) if isinstance(val, (int, float)) and not pd.isna(val)]
-            if numeric_vals:
-                min_val = min(val for i, val in numeric_vals)
-                for col_num, val in numeric_vals:
-                    if val == min_val:
-                        # tulis ulang dengan highlight dan format persen
-                        worksheet.write(row_idx, col_num, val / 100 if val > 1 else val, highlight_format)
 
+            numeric_vals = {
+                idx: val for idx, val in enumerate(row)
+                if idx < len(df_to_write.columns)
+                and df_to_write.columns[idx] in numeric_cols
+                and pd.notna(val)
+            }
+
+            min_val = min(numeric_vals.values()) if numeric_vals else None
+
+            for col_idx, col_name in enumerate(df_to_write.columns):
+                value = row[col_idx]
+
+                # ===== SAFETY =====
+                if pd.isna(value):
+                    worksheet.write_blank(row_idx, col_idx, None)
+                    continue
+
+                # ===== PICK FORMAT =====
+                if col_name in numeric_cols:
+                    fmt = fmt_min if value == min_val else fmt_pct
+                    worksheet.write_number(row_idx, col_idx, value, fmt)
+                else:
+                    worksheet.write(row_idx, col_idx, value)
+
+        # ===== AUTOFIT =====
+        for i, col in enumerate(df_to_write.columns):
+            worksheet.set_column(
+                i, i,
+                max(len(str(col)), df_to_write[col].astype(str).map(len).max()) + 2
+            )
+
+    output.seek(0)
     return output.getvalue()
 
 def page():
@@ -547,58 +583,98 @@ def page():
             for sheet in selected_sheets:
                 df = df_dict[sheet].copy()
 
-                # --- Special sheet: Rank-1 Deviation (%) ---
+                # ========= SPECIAL SHEET =========
                 if sheet == "Rank-1 Deviation (%)":
                     df_to_write = df.copy()
-                    numeric_cols = [c for c in df_to_write.columns if pd.api.types.is_numeric_dtype(df_to_write[c])]
+                    numeric_cols = [
+                        c for c in df_to_write.columns
+                        if pd.api.types.is_numeric_dtype(df_to_write[c])
+                    ]
 
                     df_to_write.to_excel(writer, index=False, sheet_name=sheet)
-                    workbook = writer.book
+                    workbook  = writer.book
                     worksheet = writer.sheets[sheet]
 
-                    # Format kolom numeric / persen
                     fmt_pct = workbook.add_format({'num_format': '#,##0.0"%"'})
-                    highlight_format = workbook.add_format({
+                    fmt_min = workbook.add_format({
                         "bold": True,
-                        "bg_color": "#D9EAD3",  # hijau lembut
+                        "bg_color": "#D9EAD3",
                         "font_color": "#1A5E20",
-                        "num_format": '#,##0.0"%"'
+                        'num_format': '#,##0.0"%"'
                     })
 
-                    # Terapkan format kolom numeric
-                    for col_idx, col_name in enumerate(df_to_write.columns):
-                        if col_name in numeric_cols:
-                            worksheet.set_column(col_idx, col_idx, 15, fmt_pct)
+                    # ===== WRITE + FORMAT CELL =====
+                    for r, row in enumerate(df_to_write.itertuples(index=False), start=1):
+                        numeric_vals = {
+                            i: val for i, val in enumerate(row)
+                            if df_to_write.columns[i] in numeric_cols and pd.notna(val)
+                        }
+                        min_val = min(numeric_vals.values()) if numeric_vals else None
 
-                    # Highlight nilai minimum per row (abaikan NaN)
-                    for row_idx, row in enumerate(df_to_write.itertuples(index=False), start=1):
-                        numeric_vals = [(i, val) for i, val in enumerate(row) if isinstance(val, (int, float)) and not pd.isna(val)]
-                        if numeric_vals:
-                            min_val = min(val for i, val in numeric_vals)
-                            for col_num, val in numeric_vals:
-                                if val == min_val:
-                                    # tulis ulang dengan highlight & format persen
-                                    worksheet.write(row_idx, col_num, val, highlight_format)
+                        for c, col in enumerate(df_to_write.columns):
+                            val = row[c]
+
+                            if pd.isna(val):
+                                worksheet.write_blank(r, c, None)
+                            elif col in numeric_cols:
+                                fmt = fmt_min if val == min_val else fmt_pct
+                                worksheet.write_number(r, c, val, fmt)
+                            else:
+                                worksheet.write(r, c, val)
+
+                    # ===== AUTOFIT (KEEP FORMAT!) =====
+                    for i, col in enumerate(df_to_write.columns):
+                        width = max(
+                            len(str(col)),
+                            df_to_write[col].astype(str).map(len).max()
+                        ) + 2
+
+                        worksheet.set_column(
+                            i, i,
+                            width,
+                            fmt_pct if col in numeric_cols else None
+                        )
+
                     continue
 
-                # --- Default behavior untuk sheet lain ---
+                # ========= DEFAULT SHEETS =========
                 df.to_excel(writer, index=False, sheet_name=sheet)
                 workbook  = writer.book
                 worksheet = writer.sheets[sheet]
 
-                # --- Format umum ---
-                fmt_rupiah = workbook.add_format({'num_format': '#,##0'})
-                fmt_pct    = workbook.add_format({'num_format': '#,##0.0"%"'})
+                fmt_rp  = workbook.add_format({'num_format': '#,##0'})
+                fmt_pct = workbook.add_format({'num_format': '#,##0.0"%"'})
 
-                # Identifikasi numeric columns
                 numeric_cols = df.select_dtypes(include=["number"]).columns.tolist()
+                pct_cols = [c for c in df.columns if "%" in c]
 
-                # Apply format kolom numeric / persen
-                for col_idx, col_name in enumerate(df.columns):
-                    if col_name in numeric_cols:
-                        worksheet.set_column(col_idx, col_idx, 15, fmt_rupiah)
-                    if "%" in col_name:
-                        worksheet.set_column(col_idx, col_idx, 15, fmt_pct)
+                # ===== REWRITE CELLS (SAFE) =====
+                for r, row in enumerate(df.itertuples(index=False), start=1):
+                    for c, col in enumerate(df.columns):
+                        val = row[c]
+
+                        if pd.isna(val) or (isinstance(val, float) and np.isinf(val)):
+                            worksheet.write_blank(r, c, None)
+                        elif col in pct_cols:
+                            worksheet.write_number(r, c, val, fmt_pct)
+                        elif col in numeric_cols:
+                            worksheet.write_number(r, c, val, fmt_rp)
+                        else:
+                            worksheet.write(r, c, val)
+
+                # ===== AUTOFIT (KEEP FORMAT!) =====
+                for i, col in enumerate(df.columns):
+                    width = max(
+                        len(str(col)),
+                        df[col].astype(str).map(len).max()
+                    ) + 2
+
+                    if col in pct_cols:
+                        worksheet.set_column(i, i, width, fmt_pct)
+                    elif col in numeric_cols:
+                        worksheet.set_column(i, i, width, fmt_rp)
+                    else:
+                        worksheet.set_column(i, i, width)
 
         output.seek(0)
         return output.getvalue()
