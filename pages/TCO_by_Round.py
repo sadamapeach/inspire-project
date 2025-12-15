@@ -192,15 +192,35 @@ def get_excel_download_highlight_total(df, sheet_name="Sheet1"):
 
 # Download highlight total
 @st.cache_data
-def get_excel_download_highlight_price_trend(df, sheet_name="Sheet1"):
+def get_excel_download_highlight_price_trend(df_raw, sheet_name="Sheet1"):
     output = BytesIO()
+
+    # ===== COERCE NUMERIC (INI KUNCI UTAMA) =====
+    df = df_raw.copy()
+    numeric_cols = []
+
+    for col in df.columns:
+        coerced = pd.to_numeric(df[col], errors="coerce")
+        if coerced.notna().any():
+            df[col] = coerced
+            numeric_cols.append(col)
+
+    value_cols = [
+        c for c in df.columns
+        if "PRICE REDUCTION (VALUE)" in c or "STANDARD DEVIATION" in c
+    ]
+
+    pct_cols = [
+        c for c in df.columns
+        if "PRICE REDUCTION (%)" in c or "PRICE STABILITY INDEX (%)" in c
+    ]
 
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
         df.to_excel(writer, index=False, sheet_name=sheet_name)
         workbook  = writer.book
         worksheet = writer.sheets[sheet_name]
 
-        # ================= FORMAT =================
+        # ===== FORMAT =====
         fmt_rp = workbook.add_format({'num_format': '#,##0'})
         fmt_pct = workbook.add_format({'num_format': '#,##0.0"%"'})
 
@@ -224,54 +244,48 @@ def get_excel_download_highlight_price_trend(df, sheet_name="Sheet1"):
             "font_color": "#1A5E20"
         })
 
-        # ================= COLUMN GROUP =================
-        num_cols = df.select_dtypes(include=["number"]).columns.tolist()
+        # ===== COLUMN FORMAT (AMANN) =====
+        for col_idx, col in enumerate(df.columns):
+            if col in pct_cols:
+                worksheet.set_column(col_idx, col_idx, 15, fmt_pct)
+            elif col in value_cols or col in numeric_cols:
+                worksheet.set_column(col_idx, col_idx, 15, fmt_rp)
 
-        value_cols = [
-            c for c in df.columns
-            if "PRICE REDUCTION (VALUE)" in c or "STANDARD DEVIATION" in c
-        ]
-
-        pct_cols = [
-            c for c in df.columns
-            if "PRICE REDUCTION (%)" in c or "PRICE STABILITY INDEX (%)" in c
-        ]
-
-        # ================= LOOP DATA =================
+        # ===== LOOP DATA =====
         for row_idx, (_, row) in enumerate(df.iterrows(), start=1):
-            is_total = any(str(x).strip().upper() == "TOTAL" for x in row)
+            is_total = any(
+                isinstance(x, str) and x.strip().upper() == "TOTAL"
+                for x in row if pd.notna(x)
+            )
 
             for col_idx, col in enumerate(df.columns):
                 val = row[col]
-
-                # ===== SAFETY =====
-                if pd.isna(val) or (isinstance(val, (int, float)) and np.isinf(val)):
-                    worksheet.write(row_idx, col_idx, "")
-                    continue
 
                 # ===== PICK FORMAT =====
                 if is_total:
                     if col in pct_cols:
                         fmt = fmt_total_pct
-                    elif col in value_cols or col in num_cols:
+                    elif col in value_cols or col in numeric_cols:
                         fmt = fmt_total_rp
                     else:
                         fmt = fmt_total_text
                 else:
                     if col in pct_cols:
                         fmt = fmt_pct
-                    elif col in value_cols or col in num_cols:
+                    elif col in value_cols or col in numeric_cols:
                         fmt = fmt_rp
                     else:
                         fmt = None
 
-                # ===== WRITE CELL =====
-                if isinstance(val, (int, float)):
+                # ===== WRITE (TYPE SAFE) =====
+                if pd.isna(val) or (isinstance(val, float) and np.isinf(val)):
+                    worksheet.write_blank(row_idx, col_idx, None, fmt)
+                elif col in pct_cols or col in numeric_cols:
                     worksheet.write_number(row_idx, col_idx, val, fmt)
                 else:
                     worksheet.write(row_idx, col_idx, val, fmt)
 
-        # ================= AUTOFIT =================
+        # ===== AUTOFIT =====
         for i, col in enumerate(df.columns):
             worksheet.set_column(
                 i, i,
