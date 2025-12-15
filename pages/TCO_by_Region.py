@@ -469,8 +469,13 @@ def page():
     for name, df in all_df.items():
         rows_before, cols_before = df.shape
         # Data cleaning
-        df_clean = df.replace(r'^\s*$', None, regex=True)
-        df_clean = df_clean.dropna(how="all", axis=0).dropna(how="all", axis=1)
+        # df_clean = df.replace(r'^\s*$', None, regex=True)
+        # df_clean = df_clean.dropna(how="all", axis=0).dropna(how="all", axis=1)
+
+        # Data cleaning ver.2
+        df_clean = df.replace(r'^\s*$', np.nan, regex=True)
+        df_clean = df_clean.loc[:, ~df_clean.columns.str.contains("^Unnamed")]
+        df_clean = df_clean.dropna(how="all")
 
         rows_after, cols_after = df_clean.shape
 

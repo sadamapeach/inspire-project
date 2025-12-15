@@ -468,12 +468,14 @@ def page():
  
     # Pre-processing
     def clean_dataframe(df):
-        """Apply cleaning rules to each sheet."""
-        # Ganti string kosong atau spasi dengan NaN
+        # Data cleaning
         df_clean = df.replace(r'^\s*$', None, regex=True)
-
-        # Hapus baris dan kolom kosong
         df_clean = df_clean.dropna(how="all", axis=0).dropna(how="all", axis=1)
+
+        # Data cleaning ver.2
+        df_clean = df.replace(r'^\s*$', np.nan, regex=True)
+        df_clean = df_clean.loc[:, ~df_clean.columns.str.contains("^Unnamed")]
+        df_clean = df_clean.dropna(how="all")
 
         # Jika header "Unnamed" -> set row 0 as header
         if any("Unnamed" in str(c) for c in df_clean.columns):
