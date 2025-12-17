@@ -62,10 +62,8 @@ def highlight_1st_2nd_vendor(row, columns):
 
     for i, col in enumerate(columns):
         if col == first_vendor:
-            # styles[i] = "background-color: #f8c8dc; color: #7a1f47;"
             styles[i] = "background-color: #C6EFCE; color: #006100;"
         elif col == second_vendor:
-            # styles[i] = "background-color: #d7c6f3; color: #402e72;"
             styles[i] = "background-color: #FFEB9C; color: #9C6500;"
     return styles
 
@@ -181,26 +179,22 @@ def get_excel_download_highlight_summary(df, sheet_name="Sheet1"):
 
         format_first = workbook.add_format({
             "bg_color": "#C6EFCE",
-            "font_color": "#006100",
             "num_format": "#,##0"
         })
 
         format_second = workbook.add_format({
             "bg_color": "#FFEB9C",
-            "font_color": "#9C6500",
             "num_format": "#,##0"
         })
 
         format_first_bold = workbook.add_format({
             "bg_color": "#C6EFCE",
-            "font_color": "#006100",
             "bold": True,
             "num_format": "#,##0"
         })
 
         format_second_bold = workbook.add_format({
             "bg_color": "#FFEB9C",
-            "font_color": "#9C6500",
             "bold": True,
             "num_format": "#,##0"
         })
@@ -461,13 +455,11 @@ def get_excel_download_highlight_1st_2nd_lowest(df, sheet_name="Sheet1"):
 
         format_first = workbook.add_format({
             'bg_color': '#C6EFCE',
-            'font_color': '#006100',
             'num_format': '#,##0'
         })
 
         format_second = workbook.add_format({
             'bg_color': '#FFEB9C',
-            'font_color': '#9C6500',
             'num_format': '#,##0'
         })
 
@@ -1402,7 +1394,7 @@ def page():
 
     with tab1:
         with st.expander("See explanation"):
-            st.write('''
+            st.caption('''
                 The visualization above compares the win rate of each vendor
                 based on how often they achieved 1st or 2nd place in all
                 tender evaluations.  
@@ -1538,7 +1530,7 @@ def page():
 
     with tab2:
         with st.expander("See explanation"):
-            st.write(f'''
+            st.caption(f'''
                 The chart above shows the average price difference between 
                 the lowest and second-lowest bids for each vendor when they 
                 rank 1st, indicating their pricing dominance or competitiveness.
@@ -1599,10 +1591,10 @@ def page():
                 })
 
                 # Ranking
-                fmt_1  = workbook.add_format({'bg_color': '#C6EFCE', 'font_color': '#006100', 'num_format': '#,##0'})
-                fmt_2  = workbook.add_format({'bg_color': '#FFEB9C', 'font_color': '#9C6500', 'num_format': '#,##0'})
-                fmt_1b = workbook.add_format({'bg_color': '#C6EFCE', 'font_color': '#006100', 'bold': True, 'num_format': '#,##0'})
-                fmt_2b = workbook.add_format({'bg_color': '#FFEB9C', 'font_color': '#9C6500', 'bold': True, 'num_format': '#,##0'})
+                fmt_1  = workbook.add_format({'bg_color': '#C6EFCE', 'num_format': '#,##0'})
+                fmt_2  = workbook.add_format({'bg_color': '#FFEB9C', 'num_format': '#,##0'})
+                fmt_1b = workbook.add_format({'bg_color': '#C6EFCE', 'bold': True, 'num_format': '#,##0'})
+                fmt_2b = workbook.add_format({'bg_color': '#FFEB9C', 'bold': True, 'num_format': '#,##0'})
 
                 num_cols = df.select_dtypes(include=["number"]).columns.tolist()
                 pct_cols = [c for c in df.columns if "%" in c]

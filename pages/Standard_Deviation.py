@@ -140,7 +140,6 @@ def get_excel_download_highlight(df, sheet_name="Sheet1"):
         fmt_min = workbook.add_format({
             "bold": True,
             "bg_color": "#D9EAD3",
-            "font_color": "#1A5E20",
             'num_format': '#,##0.0"%"'
         })
 
@@ -605,9 +604,7 @@ def page():
 
                     fmt_pct = workbook.add_format({'num_format': '#,##0.0"%"'})
                     fmt_min = workbook.add_format({
-                        "bold": True,
                         "bg_color": "#D9EAD3",
-                        "font_color": "#1A5E20",
                         'num_format': '#,##0.0"%"'
                     })
 

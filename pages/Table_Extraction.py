@@ -28,6 +28,10 @@ def format_rupiah(x):
     return formatted
 
 # Header detection function
+# Logic:
+# 1) Jika satu baris == semua string
+# 2) AND >= x% column adalah non-numerik
+# 3) AND row berada setelah GAP -> anggap sebagai header baru
 def is_header_row(row):
     str_ratio = row.apply(lambda x: isinstance(x, str)).mean()
     non_numeric = row.apply(

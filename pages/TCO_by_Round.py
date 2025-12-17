@@ -37,7 +37,6 @@ def highlight_total_row(row):
         return [""] * len(row)
     
 def highlight_total_row_v2(row):
-    # Cek apakah ada kolom yang berisi "TOTAL" (case-insensitive)
     if any(str(x).strip().upper() == "TOTAL" for x in row):
         return ["font-weight: bold; background-color: #D9EAD3; color: #1A5E20;"] * len(row)
     else:
@@ -50,10 +49,8 @@ def highlight_1st_2nd_vendor(row, columns):
 
     for i, col in enumerate(columns):
         if col == first_vendor:
-            # styles[i] = "background-color: #f8c8dc; color: #7a1f47;"
             styles[i] = "background-color: #C6EFCE; color: #006100;"
         elif col == second_vendor:
-            # styles[i] = "background-color: #d7c6f3; color: #402e72;"
             styles[i] = "background-color: #FFEB9C; color: #9C6500;"
     return styles
     
@@ -310,13 +307,11 @@ def get_excel_download_highlight_1st_2nd_lowest(df, sheet_name="Sheet1"):
 
         format_first = workbook.add_format({
             'bg_color': '#C6EFCE',
-            'font_color': '#006100',
             'num_format': '#,##0'
         })
 
         format_second = workbook.add_format({
             'bg_color': '#FFEB9C',
-            'font_color': '#9C6500',
             'num_format': '#,##0'
         })
 
@@ -1262,7 +1257,7 @@ def page():
 
     with tab1:
         with st.expander("See explanation"):
-            st.write('''
+            st.caption('''
                 The visualization above shows the number of wins each vendor
                 achieves in every tender round. A win is counted based on which
                 vendor becomes the best bidder **(1st Vendor)** for each scope.
@@ -1444,7 +1439,7 @@ def page():
 
     with tab2:
         with st.expander("See explanation"):
-            st.write('''
+            st.caption('''
                 The chart above shows the number of occurrences of each **Price 
                 Trend** for every vendor based on the pivoted tender data.
                      
@@ -1537,13 +1532,11 @@ def page():
 
                 fmt_first = workbook.add_format({
                     "bg_color": "#C6EFCE",
-                    "font_color": "#006100",
                     "num_format": "#,##0"
                 })
 
                 fmt_second = workbook.add_format({
                     "bg_color": "#FFEB9C",
-                    "font_color": "#9C6500",
                     "num_format": "#,##0"
                 })
 
