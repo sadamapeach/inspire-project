@@ -3,8 +3,6 @@ import pandas as pd
 import numpy as np
 import altair as alt
 import time
-import re
-import io
 from io import BytesIO
 
 def round_half_up(series):
@@ -28,6 +26,15 @@ def format_rupiah(x):
         if formatted.endswith(",00"):
             formatted = formatted[:-3]
     return formatted
+
+# Header detection function
+def is_header_row(row):
+    str_ratio = row.apply(lambda x: isinstance(x, str)).mean()
+    non_numeric = row.apply(
+        lambda x: not pd.to_numeric(str(x), errors="coerce") == x
+    ).mean()
+
+    return str_ratio > 0.8 and non_numeric > 0.8
 
 def page():
     # Header Title
@@ -143,10 +150,15 @@ def page():
                 df_clean = t.copy()
                 df_clean = df_clean.dropna(axis=0, how='all')
 
-                # Gunakan baris pertama sebagai header (hanya jika kolom belum ada nama atau Unnamed)
-                if any("Unnamed" in str(c) for c in df_clean.columns):
-                    df_clean.columns = df_clean.iloc[0]
-                    df_clean = df_clean[1:].reset_index(drop=True)
+                # Header detection
+                if not df_clean.empty and is_header_row(df_clean.iloc[0]):
+                    df_clean.columns = df_clean.iloc[0].astype(str)
+                    df_clean = df_clean.iloc[1:].reset_index(drop=True)
+
+                # Fallback: jika kolom masih Unnamed
+                elif any("Unnamed" in str(c) for c in df_clean.columns):
+                    df_clean.columns = df_clean.iloc[0].astype(str)
+                    df_clean = df_clean.iloc[1:].reset_index(drop=True)
 
                 # Konversi tipe data otomatis ke pandas dtypes yang lebih fleksibel
                 df_clean = df_clean.convert_dtypes()
@@ -200,31 +212,36 @@ def page():
     # Fungsi untuk convert list of DataFrame per sheet ke Excel
     def to_excel(dfs_dict):
         output = BytesIO()
-        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            workbook = writer.book
 
-            # Format rupiah
-            format_rupiah_excel = workbook.add_format({'num_format': '#,##0.00'})
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            workbook = writer.book
+            fmt_rp = workbook.add_format({'num_format': '#,##0'})
 
             for sheet_name, dfs in dfs_dict.items():
                 for idx, df in enumerate(dfs, start=1):
                     df = df.copy()
 
-                    numeric_cols = df.select_dtypes(include=['float', 'int']).columns
-                    for col in numeric_cols:
+                    num_cols = df.select_dtypes(include=["number"]).columns.tolist()
+                    for col in num_cols:
                         df[col] = round_half_up(df[col])
 
                     sheet_tab_name = f"{sheet_name}_Table{idx}"
-
-                    df.to_excel(writer, sheet_name=sheet_tab_name, index=False)
-
+                    df.to_excel(writer, index=False, sheet_name=sheet_tab_name)
                     worksheet = writer.sheets[sheet_tab_name]
 
-                    for col_idx, col_name in enumerate(df.columns):
-                        if col_name in numeric_cols:
-                            # apply number format to the entire column
-                            worksheet.set_column(col_idx, col_idx, 18, format_rupiah_excel)
+                    # ===== AUTOFIT + FORMAT (SATU LOOP) =====
+                    for i, col in enumerate(df.columns):
+                        max_len = max(
+                            len(str(col)),
+                            df[col].astype(str).map(len).max()
+                        ) + 2
 
+                        if col in num_cols:
+                            worksheet.set_column(i, i, max_len, fmt_rp)
+                        else:
+                            worksheet.set_column(i, i, max_len)
+
+        output.seek(0)
         return output.getvalue()
     
     # Buat multiselect untuk user pilih sheet
