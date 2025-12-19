@@ -90,7 +90,7 @@ def page():
             }
             </style>
 
-            <a href="https://inspire-project-user-guide-tco-comparison-by-year.streamlit.app/">
+            <a href="https://inspire-project-user-guide-table-extraction.streamlit.app/">
                 <div class="hover-div">
                     <img src="https://cdn-icons-png.flaticon.com/512/4624/4624188.png" width="35" />
                 </div>
@@ -104,7 +104,7 @@ def page():
             """
             <style>
             a.hover-link {
-                # color: #0073FF;
+                color: #0073FF;
                 font-weight: 800;
                 text-decoration: none;
             }
@@ -119,7 +119,7 @@ def page():
                 height: 65px;
             ">
                 <div style="text-align: justify; font-size: 15px;">
-                    <a href="https://inspire-project-user-guide-tco-comparison-by-year.streamlit.app/"
+                    <a href="https://inspire-project-user-guide-table-extraction.streamlit.app/"
                     class="hover-link">Table Extraction</a>
                     is used to extract tables from multi-sheet files where each sheet contain multiple
                     tables, arranged either horizontally or vertically.
